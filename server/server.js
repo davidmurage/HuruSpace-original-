@@ -22,7 +22,7 @@ app.use('/api/places', placeRoutes);
 // MongoDB connection with better error handling
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGODB_URI;
+    const mongoURI = process.env.MONGO_URI;
     
     if (!mongoURI) {
       console.warn('⚠️  MONGODB_URI not found in environment variables');
