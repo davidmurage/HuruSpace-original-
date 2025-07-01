@@ -159,7 +159,7 @@ const AdminDashboard: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => setEditingPlace(place)}
+                            onClick={() => setEditingPlace(places)}
                             className="text-blue-600 hover:text-blue-900"
                           >
                             <Edit size={16} />
