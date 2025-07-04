@@ -4,8 +4,11 @@ import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import Place from '../models/Place.js';
 import auth from '../middleware/auth.js';
+import dotenv from 'dotenv';
 
 const router = express.Router();
+dotenv.config();
+
 
 // Configure Cloudinary
 cloudinary.config({
@@ -18,7 +21,7 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: 'huruspaces',
+    folder: 'folders',
     allowed_formats: ['jpg', 'jpeg', 'png', 'gif'],
     transformation: [{ width: 800, height: 600, crop: 'limit' }]
   }
