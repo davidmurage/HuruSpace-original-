@@ -16,9 +16,10 @@ import { Place } from '../store/slices/placesSlice';
 
 interface PlaceCardProps {
   place: Place;
+  distanceLabel?: string | null;
 }
 
-const PlaceCard: React.FC<PlaceCardProps> = ({ place }) => {
+const PlaceCard: React.FC<PlaceCardProps> = ({ place, distanceLabel }) => {
   const accessibilityDetails = normalizeAccessibilityDetails(place.accessibilityDetails);
   const features =
     place.accessibilityFeatures.length > 0
@@ -27,6 +28,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place }) => {
   const activeCategories = Object.entries(accessibilityDetails).filter(
     ([, value]) => value.length > 0
   );
+  const activeAlerts = place.alerts.filter((alert) => alert.status === 'active');
 
   return (
     <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
@@ -58,6 +60,11 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place }) => {
           >
             {place.verificationStatus === 'verified' ? 'Verified' : 'Community'}
           </span>
+          {activeAlerts.length > 0 && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+              {activeAlerts.length} alert{activeAlerts.length > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
         <div className="absolute right-4 top-4 rounded-2xl bg-slate-900/85 px-3 py-2 text-right text-white">
@@ -122,9 +129,16 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place }) => {
         </div>
 
         <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <Phone size={14} />
-            {place.contact.phone || 'Contact not provided'}
+          <div className="space-y-1 text-sm text-slate-500">
+            <div className="flex items-center gap-2">
+              <Phone size={14} />
+              {place.contact.phone || 'Contact not provided'}
+            </div>
+            {distanceLabel && (
+              <div className="text-xs font-medium text-blue-700">
+                {distanceLabel} away
+              </div>
+            )}
           </div>
           <Link
             to={`/places/${place._id}`}

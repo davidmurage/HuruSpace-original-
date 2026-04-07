@@ -1,11 +1,27 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useParams } from 'react-router-dom';
 import { MapPin, MessageSquare, Phone, ShieldCheck, Star } from 'lucide-react';
+import AccessibilityMap from '../components/AccessibilityMap';
+import LiveRefreshStatus from '../components/LiveRefreshStatus';
+import PlaceAlertsPanel from '../components/PlaceAlertsPanel';
+import PlaceNavigationPanel from '../components/PlaceNavigationPanel';
+import VoiceAssistant from '../components/VoiceAssistant';
 import { NEED_LABELS, normalizeAccessibilityDetails } from '../constants/accessibility';
-import { addReview, fetchPlaceById } from '../store/slices/placesSlice';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+import {
+  addAlert,
+  addReview,
+  fetchPlaceById,
+  resolveAlert,
+  PlaceAlert,
+} from '../store/slices/placesSlice';
 import { RootState, AppDispatch } from '../store/store';
 import { NeedCategory } from '../types/accessibility';
+import { speakText } from '../utils/speech';
+
+const getAlertIdentity = (alert: PlaceAlert, index: number) =>
+  alert._id || `${alert.alertType}-${alert.createdAt}-${index}`;
 
 const PlaceDetails: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -17,6 +33,7 @@ const PlaceDetails: React.FC = () => {
   const [accessibilityRating, setAccessibilityRating] = useState(5);
   const [comment, setComment] = useState('');
   const [issueFlags, setIssueFlags] = useState('');
+  const previousActiveAlertKeysRef = useRef<string | null>(null);
 
   const place = useMemo(() => {
     if (!id) {
@@ -35,6 +52,100 @@ const PlaceDetails: React.FC = () => {
       dispatch(fetchPlaceById(id));
     }
   }, [dispatch, id]);
+
+  const refreshPlace = useCallback(
+    () => (id ? dispatch(fetchPlaceById(id)).unwrap() : Promise.resolve(null)),
+    [dispatch, id]
+  );
+
+  const {
+    isRefreshing: isRefreshingPlace,
+    lastRefreshError: placeRefreshError,
+    lastUpdatedAt: placeLastUpdatedAt,
+    refreshNow: refreshPlaceNow,
+  } = useRealtimeRefresh({
+    enabled: Boolean(id),
+    intervalMs: 30000,
+    onRefresh: refreshPlace,
+  });
+
+  const accessibilityDetails = useMemo(
+    () => normalizeAccessibilityDetails(place?.accessibilityDetails),
+    [place?.accessibilityDetails]
+  );
+
+  const activeAlerts = useMemo(
+    () => (place?.alerts || []).filter((alert) => alert.status === 'active'),
+    [place?.alerts]
+  );
+
+  const activeAlertKeys = useMemo(
+    () => activeAlerts.map(getAlertIdentity).join('|'),
+    [activeAlerts]
+  );
+
+  const canResolveAlerts = Boolean(
+    place &&
+      (user?.role === 'admin' ||
+        (typeof place.createdBy !== 'string' &&
+          (place.createdBy._id === user?.id || place.createdBy.id === user?.id)))
+  );
+
+  const placeSummary = useMemo(() => {
+    if (!place) {
+      return 'Place details are still loading.';
+    }
+
+    const populatedCategories = (Object.keys(NEED_LABELS) as NeedCategory[])
+      .filter((category) => accessibilityDetails[category].length > 0)
+      .map(
+        (category) =>
+          `${NEED_LABELS[category]}: ${accessibilityDetails[category].slice(0, 3).join(', ')}`
+      );
+
+    const alertsSummary =
+      activeAlerts.length > 0
+        ? `${activeAlerts.length} active alert${activeAlerts.length > 1 ? 's' : ''} reported.`
+        : 'No active alerts are currently reported.';
+
+    return `${place.name} has an accessibility score of ${place.accessibilityScore} out of 100. ${alertsSummary} ${populatedCategories.slice(0, 3).join('. ')}.`;
+  }, [accessibilityDetails, activeAlerts.length, place]);
+
+  useEffect(() => {
+    if (!place) {
+      previousActiveAlertKeysRef.current = null;
+      return;
+    }
+
+    const isVoiceModeEnabled = Boolean(user?.accessibilityProfile?.interaction?.voice);
+
+    if (!isVoiceModeEnabled) {
+      previousActiveAlertKeysRef.current = activeAlertKeys;
+      return;
+    }
+
+    const previousActiveAlertKeys = previousActiveAlertKeysRef.current;
+
+    if (previousActiveAlertKeys === null) {
+      previousActiveAlertKeysRef.current = activeAlertKeys;
+      return;
+    }
+
+    const previousKeys = new Set(previousActiveAlertKeys.split('|').filter(Boolean));
+    const newAlerts = activeAlerts.filter(
+      (alert, index) => !previousKeys.has(getAlertIdentity(alert, index))
+    );
+
+    previousActiveAlertKeysRef.current = activeAlertKeys;
+
+    if (newAlerts.length > 0) {
+      speakText(
+        `New accessibility alert for ${place.name}: ${
+          newAlerts[0].message || 'A temporary accessibility issue was reported.'
+        }`
+      );
+    }
+  }, [activeAlertKeys, activeAlerts, place, user?.accessibilityProfile?.interaction?.voice]);
 
   if (!place && isLoading) {
     return (
@@ -63,8 +174,6 @@ const PlaceDetails: React.FC = () => {
     );
   }
 
-  const accessibilityDetails = normalizeAccessibilityDetails(place.accessibilityDetails);
-
   const handleReviewSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
@@ -83,6 +192,75 @@ const PlaceDetails: React.FC = () => {
     setAccessibilityRating(5);
     setComment('');
     setIssueFlags('');
+  };
+
+  const handleReportAlert = async ({
+    alertType,
+    message,
+  }: {
+    alertType: string;
+    message: string;
+  }) => {
+    await dispatch(addAlert({ placeId: place._id, alertType, message }));
+  };
+
+  const handleResolveAlert = async (alertId: string) => {
+    await dispatch(resolveAlert({ placeId: place._id, alertId }));
+  };
+
+  const handleVoiceCommand = async (command: string) => {
+    const normalized = command.toLowerCase().trim();
+
+    if (!normalized) {
+      return 'Try saying read details, read alerts, or read accessibility.';
+    }
+
+    if (normalized.includes('read details') || normalized.includes('read place')) {
+      return placeSummary;
+    }
+
+    if (normalized.includes('read alerts')) {
+      if (!activeAlerts.length) {
+        return 'There are no active accessibility alerts for this place.';
+      }
+
+      return activeAlerts
+        .slice(0, 3)
+        .map((alert) => alert.message || 'A temporary accessibility issue is active.')
+        .join(' ');
+    }
+
+    if (normalized.includes('read accessibility')) {
+      const entries = (Object.keys(NEED_LABELS) as NeedCategory[])
+        .filter((category) => accessibilityDetails[category].length > 0)
+        .map(
+          (category) =>
+            `${NEED_LABELS[category]} support includes ${accessibilityDetails[category]
+              .slice(0, 3)
+              .join(', ')}`
+        );
+
+      return entries.length
+        ? entries.join('. ')
+        : 'No detailed accessibility features are listed yet.';
+    }
+
+    if (normalized.includes('navigate')) {
+      return 'Use the accessible navigation panel to open Google Maps or OpenStreetMap directions.';
+    }
+
+    if (normalized.includes('refresh') || normalized.includes('update')) {
+      const didRefresh = await refreshPlaceNow();
+      return didRefresh
+        ? 'This place has been refreshed with the latest accessibility alerts.'
+        : 'I could not refresh this place just now. Please try again.';
+    }
+
+    if (normalized.includes('report alert')) {
+      return 'Use the live accessibility alerts panel to report issues like a blocked ramp or broken lift.';
+    }
+
+    return placeSummary;
   };
 
   return (
@@ -201,6 +379,37 @@ const PlaceDetails: React.FC = () => {
               </div>
             </section>
 
+            <VoiceAssistant
+              title="Voice guide"
+              description="Listen to place details, accessibility features, and alert summaries using browser voice support."
+              commandExamples={[
+                'Read details',
+                'Read accessibility',
+                'Read alerts',
+                'Refresh alerts',
+                'Navigate there',
+              ]}
+              onCommand={handleVoiceCommand}
+              getSummary={() => placeSummary}
+            />
+
+            <LiveRefreshStatus
+              title="Live alert refresh"
+              description="Huruspaces checks this place for new or resolved accessibility alerts every 30 seconds while this page is visible."
+              isRefreshing={isRefreshingPlace}
+              lastRefreshError={placeRefreshError}
+              lastUpdatedAt={placeLastUpdatedAt}
+              onRefresh={refreshPlaceNow}
+            />
+
+            <PlaceAlertsPanel
+              place={place}
+              canReport={Boolean(user)}
+              canResolve={Boolean(canResolveAlerts)}
+              onReportAlert={handleReportAlert}
+              onResolveAlert={handleResolveAlert}
+            />
+
             <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center gap-2">
                 <MessageSquare className="text-blue-700" size={20} />
@@ -260,6 +469,18 @@ const PlaceDetails: React.FC = () => {
           </div>
 
           <div className="space-y-6">
+            <AccessibilityMap
+              places={[place]}
+              highlightedPlaceId={place._id}
+              title="Place map"
+              description="View the reported place coordinates on OpenStreetMap."
+            />
+
+            <PlaceNavigationPanel
+              place={place}
+              profile={user?.accessibilityProfile || null}
+            />
+
             <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center gap-2 text-emerald-700">
                 <ShieldCheck size={20} />

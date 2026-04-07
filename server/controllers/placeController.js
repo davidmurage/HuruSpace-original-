@@ -31,6 +31,13 @@ const parsePlacePayload = (body, files = []) => {
 const canManagePlace = (user, place) =>
   user?.role === 'admin' || String(place.createdBy) === String(user?._id);
 
+const populatePlace = (query) =>
+  query
+    .populate('createdBy', 'name email')
+    .populate('reviews.user', 'name')
+    .populate('alerts.user', 'name')
+    .populate('alerts.resolvedBy', 'name');
+
 export const getPlaces = async (req, res) => {
   try {
     const { search, type, features, needs } = req.query;
@@ -66,10 +73,7 @@ export const getPlaces = async (req, res) => {
       }));
     }
 
-    const places = await Place.find(query)
-      .populate('createdBy', 'name email')
-      .populate('reviews.user', 'name')
-      .sort({ createdAt: -1 });
+    const places = await populatePlace(Place.find(query)).sort({ createdAt: -1 });
 
     res.json(places);
   } catch (error) {
@@ -80,9 +84,7 @@ export const getPlaces = async (req, res) => {
 
 export const getPlaceById = async (req, res) => {
   try {
-    const place = await Place.findById(req.params.id)
-      .populate('createdBy', 'name email')
-      .populate('reviews.user', 'name');
+    const place = await populatePlace(Place.findById(req.params.id));
 
     if (!place) {
       return res.status(404).json({ message: 'Place not found' });
@@ -108,6 +110,9 @@ export const createPlace = async (req, res) => {
 
     await place.save();
     await place.populate('createdBy', 'name email');
+    await place.populate('reviews.user', 'name');
+    await place.populate('alerts.user', 'name');
+    await place.populate('alerts.resolvedBy', 'name');
 
     res.status(201).json(place);
   } catch (error) {
@@ -146,6 +151,8 @@ export const updatePlace = async (req, res) => {
     await place.save();
     await place.populate('createdBy', 'name email');
     await place.populate('reviews.user', 'name');
+    await place.populate('alerts.user', 'name');
+    await place.populate('alerts.resolvedBy', 'name');
 
     res.json(place);
   } catch (error) {
@@ -199,10 +206,77 @@ export const addReview = async (req, res) => {
     await place.save();
     await place.populate('createdBy', 'name email');
     await place.populate('reviews.user', 'name');
+    await place.populate('alerts.user', 'name');
+    await place.populate('alerts.resolvedBy', 'name');
 
     res.status(201).json(place);
   } catch (error) {
     console.error('Error adding review:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const addAlert = async (req, res) => {
+  try {
+    const place = await Place.findById(req.params.id);
+
+    if (!place) {
+      return res.status(404).json({ message: 'Place not found' });
+    }
+
+    const alert = {
+      user: req.userId,
+      alertType: req.body.alertType || 'other',
+      message: req.body.message || '',
+      status: 'active',
+    };
+
+    place.alerts.unshift(alert);
+
+    await place.save();
+    await place.populate('createdBy', 'name email');
+    await place.populate('reviews.user', 'name');
+    await place.populate('alerts.user', 'name');
+    await place.populate('alerts.resolvedBy', 'name');
+
+    res.status(201).json(place);
+  } catch (error) {
+    console.error('Error adding alert:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const resolveAlert = async (req, res) => {
+  try {
+    const place = await Place.findById(req.params.id);
+
+    if (!place) {
+      return res.status(404).json({ message: 'Place not found' });
+    }
+
+    if (!canManagePlace(req.user, place)) {
+      return res.status(403).json({ message: 'You do not have permission to resolve this alert' });
+    }
+
+    const alert = place.alerts.id(req.params.alertId);
+
+    if (!alert) {
+      return res.status(404).json({ message: 'Alert not found' });
+    }
+
+    alert.status = 'resolved';
+    alert.resolvedAt = new Date();
+    alert.resolvedBy = req.userId;
+
+    await place.save();
+    await place.populate('createdBy', 'name email');
+    await place.populate('reviews.user', 'name');
+    await place.populate('alerts.user', 'name');
+    await place.populate('alerts.resolvedBy', 'name');
+
+    res.json(place);
+  } catch (error) {
+    console.error('Error resolving alert:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

@@ -1,106 +1,124 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin } from 'lucide-react';
+import { ExternalLink, MapPin } from 'lucide-react';
 import { Place } from '../store/slices/placesSlice';
+import {
+  buildOpenStreetMapEmbedUrl,
+  buildOpenStreetMapPageUrl,
+  hasCoordinates,
+} from '../utils/location';
 
 interface AccessibilityMapProps {
   places: Place[];
+  highlightedPlaceId?: string;
+  title?: string;
+  description?: string;
 }
 
-const AccessibilityMap: React.FC<AccessibilityMapProps> = ({ places }) => {
-  const points = useMemo(() => {
-    const geoPlaces = places.filter(
-      (place) =>
-        place.location.latitude !== 0 || place.location.longitude !== 0
-    );
+const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
+  places,
+  highlightedPlaceId,
+  title = 'Accessibility Map',
+  description = 'Explore precise place coordinates with OpenStreetMap.',
+}) => {
+  const placesWithCoordinates = useMemo(
+    () => places.filter((place) => hasCoordinates(place.location)),
+    [places]
+  );
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(
+    highlightedPlaceId || placesWithCoordinates[0]?._id || null
+  );
 
-    const hasGeoSpread =
-      geoPlaces.length > 1 &&
-      (new Set(geoPlaces.map((place) => place.location.latitude)).size > 1 ||
-        new Set(geoPlaces.map((place) => place.location.longitude)).size > 1);
-
-    if (hasGeoSpread) {
-      const latitudes = geoPlaces.map((place) => place.location.latitude);
-      const longitudes = geoPlaces.map((place) => place.location.longitude);
-      const minLat = Math.min(...latitudes);
-      const maxLat = Math.max(...latitudes);
-      const minLng = Math.min(...longitudes);
-      const maxLng = Math.max(...longitudes);
-
-      return places.map((place, index) => ({
-        ...place,
-        id: `${place._id}-${index}`,
-        x:
-          ((place.location.longitude - minLng) / Math.max(maxLng - minLng, 0.01)) * 72 +
-          12,
-        y:
-          (1 - (place.location.latitude - minLat) / Math.max(maxLat - minLat, 0.01)) *
-            62 +
-          16,
-      }));
+  useEffect(() => {
+    if (highlightedPlaceId) {
+      setSelectedPlaceId(highlightedPlaceId);
+      return;
     }
 
-    return places.map((place, index) => {
-      const columns = 4;
-      const row = Math.floor(index / columns);
-      const column = index % columns;
+    if (!selectedPlaceId && placesWithCoordinates[0]) {
+      setSelectedPlaceId(placesWithCoordinates[0]._id);
+    }
+  }, [highlightedPlaceId, placesWithCoordinates, selectedPlaceId]);
 
-      return {
-        ...place,
-        id: `${place._id}-${index}`,
-        x: 14 + column * 20 + (row % 2) * 4,
-        y: 22 + row * 20,
-      };
-    });
-  }, [places]);
+  const selectedPlace =
+    placesWithCoordinates.find((place) => place._id === selectedPlaceId) ||
+    placesWithCoordinates[0] ||
+    null;
 
   if (!places.length) {
     return (
       <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
-        Add places to see the Huruspaces community map preview.
+        Add places to see them on the Huruspaces map.
+      </div>
+    );
+  }
+
+  if (!selectedPlace) {
+    return (
+      <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
+        No places with usable coordinates are available yet.
       </div>
     );
   }
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">
-            Accessibility Map Preview
-          </h3>
-          <p className="text-sm text-slate-600">
-            MVP preview of nearby accessible spaces with quick pin access.
-          </p>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <p className="text-sm text-slate-600">{description}</p>
         </div>
-        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-          {places.length} places
-        </span>
+        <a
+          href={buildOpenStreetMapPageUrl(selectedPlace.location)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
+        >
+          Open full map
+          <ExternalLink size={14} />
+        </a>
       </div>
 
-      <div className="relative mt-5 h-80 overflow-hidden rounded-3xl bg-gradient-to-br from-sky-100 via-white to-emerald-100">
-        <div className="absolute inset-0 opacity-40">
-          <div className="absolute left-10 top-8 h-20 w-48 rounded-full bg-sky-200 blur-2xl" />
-          <div className="absolute right-10 top-12 h-24 w-24 rounded-full bg-emerald-200 blur-2xl" />
-          <div className="absolute bottom-10 left-1/3 h-32 w-56 rounded-full bg-blue-200 blur-3xl" />
-        </div>
+      <div className="mt-5 overflow-hidden rounded-3xl border border-slate-200">
+        <iframe
+          title={`${selectedPlace.name} map`}
+          src={buildOpenStreetMapEmbedUrl(selectedPlace.location)}
+          className="h-80 w-full border-0"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+      </div>
 
-        {points.map((place) => (
-          <Link
-            key={place.id}
-            to={`/places/${place._id}`}
-            className="absolute -translate-x-1/2 -translate-y-1/2"
-            style={{ left: `${place.x}%`, top: `${place.y}%` }}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {placesWithCoordinates.slice(0, 9).map((place) => (
+          <div
+            key={place._id}
+            className={`rounded-2xl border px-4 py-3 text-left transition ${
+              selectedPlace._id === place._id
+                ? 'border-blue-600 bg-blue-50 text-blue-900'
+                : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300'
+            }`}
           >
-            <div className="flex flex-col items-center gap-1">
-              <span className="rounded-full bg-blue-600 p-2 text-white shadow-lg transition hover:bg-blue-700">
-                <MapPin size={18} />
-              </span>
-              <span className="max-w-24 rounded-full bg-white/90 px-2 py-1 text-center text-[11px] font-semibold text-slate-700 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setSelectedPlaceId(place._id)}
+              className="w-full text-left"
+            >
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <MapPin size={14} />
                 {place.name}
-              </span>
+              </div>
+            </button>
+            <div className="mt-1 text-xs text-slate-500">{place.address}</div>
+            <div className="mt-2">
+              <Link
+                to={`/places/${place._id}`}
+                className="text-xs font-semibold text-blue-700"
+              >
+                View details
+              </Link>
             </div>
-          </Link>
+          </div>
         ))}
       </div>
     </div>
