@@ -1,14 +1,18 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import axios from 'axios';
 import { API_URL } from '../../utils/config';
+import { AccessibilityProfile } from '../../types/accessibility';
 
+const SESSION_TOKEN_KEY = 'token';
+const SESSION_USER_KEY = 'huruspaces-user';
 
-
-interface User {
+export interface User {
   id: string;
   email: string;
   name: string;
   role: 'admin' | 'user';
+  accessibilityProfile: AccessibilityProfile;
+  createdAt?: string;
 }
 
 interface AuthState {
@@ -18,28 +22,147 @@ interface AuthState {
   error: string | null;
 }
 
+const getStoredUser = (): User | null => {
+  const rawUser = localStorage.getItem(SESSION_USER_KEY);
+
+  if (!rawUser) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawUser) as User;
+  } catch {
+    localStorage.removeItem(SESSION_USER_KEY);
+    return null;
+  }
+};
+
+const persistSession = (token: string, user: User) => {
+  localStorage.setItem(SESSION_TOKEN_KEY, token);
+  localStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
+};
+
+const clearSession = () => {
+  localStorage.removeItem(SESSION_TOKEN_KEY);
+  localStorage.removeItem(SESSION_USER_KEY);
+};
+
+const getAuthHeaders = (token: string | null) => ({
+  Authorization: `Bearer ${token}`,
+});
+
+const getErrorMessage = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message || error.message || 'Request failed';
+  }
+
+  return 'Request failed';
+};
+
 const initialState: AuthState = {
-  user: null,
-  token: localStorage.getItem('token'),
+  user: getStoredUser(),
+  token: localStorage.getItem(SESSION_TOKEN_KEY),
   isLoading: false,
   error: null,
 };
 
 export const login = createAsyncThunk(
   'auth/login',
-  async ({ email, password }: { email: string; password: string }) => {
-    const response = await axios.post(`${API_URL}/auth/login`, { email, password });
-    localStorage.setItem('token', response.data.token);
-    return response.data;
+  async (
+    { email, password }: { email: string; password: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await axios.post(`${API_URL}/auth/login`, { email, password });
+      persistSession(response.data.token, response.data.user);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
   }
 );
 
 export const register = createAsyncThunk(
   'auth/register',
-  async ({ name, email, password, role }: { name: string; email: string; password: string; role: string }) => {
-    const response = await axios.post(`${API_URL}/auth/register`, { name, email, password, role });
-    localStorage.setItem('token', response.data.token);
-    return response.data;
+  async (
+    {
+      name,
+      email,
+      password,
+      role,
+      accessibilityProfile,
+    }: {
+      name: string;
+      email: string;
+      password: string;
+      role: string;
+      accessibilityProfile: AccessibilityProfile;
+    },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await axios.post(`${API_URL}/auth/register`, {
+        name,
+        email,
+        password,
+        role,
+        accessibilityProfile,
+      });
+      persistSession(response.data.token, response.data.user);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const fetchCurrentUser = createAsyncThunk(
+  'auth/fetchCurrentUser',
+  async (_, { getState, rejectWithValue }) => {
+    const state = getState() as { auth: AuthState };
+
+    if (!state.auth.token) {
+      return rejectWithValue('No session found');
+    }
+
+    try {
+      const response = await axios.get(`${API_URL}/auth/me`, {
+        headers: getAuthHeaders(state.auth.token),
+      });
+      localStorage.setItem(SESSION_USER_KEY, JSON.stringify(response.data.user));
+      return response.data.user as User;
+    } catch (error) {
+      clearSession();
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async (
+    {
+      name,
+      accessibilityProfile,
+    }: {
+      name: string;
+      accessibilityProfile: AccessibilityProfile;
+    },
+    { getState, rejectWithValue }
+  ) => {
+    const state = getState() as { auth: AuthState };
+
+    try {
+      const response = await axios.put(
+        `${API_URL}/users/profile`,
+        { name, accessibilityProfile },
+        { headers: getAuthHeaders(state.auth.token) }
+      );
+      localStorage.setItem(SESSION_USER_KEY, JSON.stringify(response.data.user));
+      return response.data.user as User;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
   }
 );
 
@@ -48,7 +171,7 @@ const authSlice = createSlice({
   initialState,
   reducers: {
     logout: (state) => {
-      localStorage.removeItem('token');
+      clearSession();
       state.user = null;
       state.token = null;
     },
@@ -69,7 +192,7 @@ const authSlice = createSlice({
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.error.message || 'Login failed';
+        state.error = (action.payload as string) || 'Login failed';
       })
       .addCase(register.pending, (state) => {
         state.isLoading = true;
@@ -82,7 +205,32 @@ const authSlice = createSlice({
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.error.message || 'Registration failed';
+        state.error = (action.payload as string) || 'Registration failed';
+      })
+      .addCase(fetchCurrentUser.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(fetchCurrentUser.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload;
+      })
+      .addCase(fetchCurrentUser.rejected, (state, action) => {
+        state.isLoading = false;
+        state.user = null;
+        state.token = null;
+        state.error = (action.payload as string) || 'Unable to restore session';
+      })
+      .addCase(updateProfile.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload;
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || 'Unable to update profile';
       });
   },
 });

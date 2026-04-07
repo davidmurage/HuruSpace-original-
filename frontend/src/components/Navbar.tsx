@@ -1,192 +1,205 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../store/store';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  Accessibility,
+  Home,
+  LayoutDashboard,
+  LogOut,
+  MapPinned,
+  Menu,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
+import { RootState, AppDispatch } from '../store/store';
 import { logout } from '../store/slices/authSlice';
-import { Menu, User, LogOut, Home, Building2, X } from 'lucide-react';
 
 const Navbar: React.FC = () => {
-  const { user } = useSelector((state: RootState) => state.auth);
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user } = useSelector((state: RootState) => state.auth);
+  const [open, setOpen] = useState(false);
 
   const handleLogout = () => {
     dispatch(logout());
     navigate('/');
   };
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
+  const closeMenu = () => setOpen(false);
 
   return (
-    <nav className="bg-white shadow-lg border-b-4 border-blue-500">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo and Brand */}
-          <Link to="/" className="flex items-center space-x-3">
-            <img 
-              src="/WhatsApp Image 2025-06-30 at 12.26.36.jpeg" 
-              alt="HuruSpaces Logo" 
-              className="h-10 w-auto"
-            />
-            <span className="text-2xl font-bold text-blue-600">HuruSpaces</span>
-          </Link>
+    <nav className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <Link to="/" className="flex items-center gap-3">
+          <img
+            src="/WhatsApp Image 2025-06-30 at 12.26.36.jpeg"
+            alt="HuruSpaces logo"
+            className="h-11 w-11 rounded-2xl object-cover"
+          />
+          <div>
+            <span className="block text-lg font-bold text-slate-900">
+              HuruSpaces
+            </span>
+            <span className="block text-xs text-slate-500">
+              Inclusive place discovery
+            </span>
+          </div>
+        </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="flex items-center space-x-1 text-gray-700 hover:text-blue-600 transition-colors">
-              <Home size={20} />
-              <span>Home</span>
+        <div className="hidden items-center gap-6 md:flex">
+          <Link className="text-sm font-medium text-slate-600 hover:text-blue-700" to="/">
+            Home
+          </Link>
+          <Link
+            className="text-sm font-medium text-slate-600 hover:text-blue-700"
+            to="/places"
+          >
+            Discover
+          </Link>
+          {user && (
+            <Link
+              className="text-sm font-medium text-slate-600 hover:text-blue-700"
+              to="/dashboard"
+            >
+              Dashboard
             </Link>
-            <Link to="/places" className="flex items-center space-x-1 text-gray-700 hover:text-blue-600 transition-colors">
-              <Building2 size={20} />
-              <span>Places</span>
+          )}
+          {user?.role === 'admin' && (
+            <Link
+              className="text-sm font-medium text-slate-600 hover:text-blue-700"
+              to="/admin"
+            >
+              Admin
             </Link>
+          )}
+        </div>
+
+        <div className="hidden items-center gap-3 md:flex">
+          {user ? (
+            <>
+              <span className="rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-700">
+                {user.name}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-red-200 hover:text-red-600"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className="rounded-full px-4 py-2 text-sm font-medium text-slate-700 transition hover:text-blue-700"
+              >
+                Login
+              </Link>
+              <Link
+                to="/register"
+                className="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Create profile
+              </Link>
+            </>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="rounded-full border border-slate-200 p-2 text-slate-700 md:hidden"
+        >
+          {open ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      </div>
+
+      {open && (
+        <div className="border-t border-slate-200 bg-white px-4 py-4 md:hidden">
+          <div className="space-y-2">
+            <Link
+              to="/"
+              onClick={closeMenu}
+              className="flex items-center gap-2 rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              <Home size={18} />
+              Home
+            </Link>
+            <Link
+              to="/places"
+              onClick={closeMenu}
+              className="flex items-center gap-2 rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              <MapPinned size={18} />
+              Discover spaces
+            </Link>
+            {user && (
+              <Link
+                to="/dashboard"
+                onClick={closeMenu}
+                className="flex items-center gap-2 rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                <LayoutDashboard size={18} />
+                Dashboard
+              </Link>
+            )}
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                onClick={closeMenu}
+                className="flex items-center gap-2 rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                <ShieldCheck size={18} />
+                Admin
+              </Link>
+            )}
           </div>
 
-          {/* Desktop Auth Links */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="mt-4 border-t border-slate-200 pt-4">
             {user ? (
-              <div className="flex items-center space-x-4">
-                <span className="text-gray-700">Welcome, {user.name}</span>
-                {user.role === 'admin' && (
-                  <Link
-                    to="/admin"
-                    className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
-                  >
-                    Admin Panel
-                  </Link>
-                )}
-                <Link
-                  to="/dashboard"
-                  className="flex items-center space-x-1 text-gray-700 hover:text-blue-600 transition-colors"
-                >
-                  <User size={20} />
-                  <span>Dashboard</span>
-                </Link>
+              <>
+                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  Signed in as <span className="font-semibold">{user.name}</span>
+                </div>
                 <button
-                  onClick={handleLogout}
-                  className="flex items-center space-x-1 text-gray-700 hover:text-red-600 transition-colors"
+                  onClick={() => {
+                    closeMenu();
+                    handleLogout();
+                  }}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700"
                 >
-                  <LogOut size={20} />
-                  <span>Logout</span>
+                  <LogOut size={18} />
+                  Logout
                 </button>
-              </div>
+              </>
             ) : (
-              <div className="flex items-center space-x-4">
+              <div className="grid gap-3">
                 <Link
                   to="/login"
-                  className="text-blue-600 hover:text-blue-800 transition-colors"
+                  onClick={closeMenu}
+                  className="rounded-full border border-slate-200 px-4 py-3 text-center text-sm font-medium text-slate-700"
                 >
                   Login
                 </Link>
                 <Link
                   to="/register"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={closeMenu}
+                  className="rounded-full bg-blue-600 px-4 py-3 text-center text-sm font-semibold text-white"
                 >
-                  Register
+                  Create accessible profile
                 </Link>
               </div>
             )}
-          </div>
-
-          {/* Mobile Hamburger Menu (right side) */}
-          <div className="md:hidden flex items-center">
             {!user && (
-              <Link
-                to="/login"
-                className="text-blue-600 hover:text-blue-800 transition-colors mr-4"
-              >
-                Login
-              </Link>
-            )}
-            <button
-              className="text-gray-700 hover:text-blue-600 focus:outline-none"
-              onClick={toggleMobileMenu}
-            >
-              {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden bg-white border-t border-gray-200">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-            <Link
-              to="/"
-              className="flex items-center px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md"
-              onClick={toggleMobileMenu}
-            >
-              <Home size={20} className="mr-2" />
-              Home
-            </Link>
-            <Link
-              to="/places"
-              className="flex items-center px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md"
-              onClick={toggleMobileMenu}
-            >
-              <Building2 size={20} className="mr-2" />
-              Places
-            </Link>
-
-            {user ? (
-              <>
-                <div className="px-3 py-2 text-gray-700">
-                  Welcome, {user.name}
+              <div className="mt-4 rounded-2xl bg-blue-50 p-4 text-sm text-blue-900">
+                <div className="flex items-start gap-2">
+                  <Accessibility className="mt-0.5" size={18} />
+                  <p>
+                    Create a profile to personalize results based on your
+                    accessibility needs.
+                  </p>
                 </div>
-                {user.role === 'admin' && (
-                  <Link
-                    to="/admin"
-                    className="flex items-center px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md"
-                    onClick={toggleMobileMenu}
-                  >
-                    <span className="bg-green-500 text-white px-2 py-1 rounded text-sm">
-                      Admin Panel
-                    </span>
-                  </Link>
-                )}
-                <Link
-                  to="/dashboard"
-                  className="flex items-center px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md"
-                  onClick={toggleMobileMenu}
-                >
-                  <User size={20} className="mr-2" />
-                  Dashboard
-                </Link>
-                <button
-                  onClick={() => {
-                    handleLogout();
-                    toggleMobileMenu();
-                  }}
-                  className="w-full flex items-center px-3 py-2 text-gray-700 hover:text-red-600 hover:bg-gray-50 rounded-md"
-                >
-                  <LogOut size={20} className="mr-2" />
-                  Logout
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="flex items-center px-3 py-2 text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded-md"
-                  onClick={toggleMobileMenu}
-                >
-                  <span>Login</span>
-                </Link>
-                <div className="pt-2 pb-2">
-                  <Link
-                    to="/register"
-                    className="block w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-center hover:bg-blue-700 transition-colors"
-                    onClick={toggleMobileMenu}
-                  >
-                    Register
-                  </Link>
-                </div>
-              </>
+              </div>
             )}
           </div>
         </div>

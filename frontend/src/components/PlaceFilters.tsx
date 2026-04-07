@@ -1,121 +1,171 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../store/store';
-import { setFilters, clearFilters } from '../store/slices/placesSlice';
-import { Filter, X } from 'lucide-react';
+import { Filter, RotateCcw, Sparkles } from 'lucide-react';
+import {
+  ACCESSIBILITY_OPTIONS,
+  NEED_LABELS,
+  PLACE_TYPES,
+  getPreferredFeatures,
+} from '../constants/accessibility';
+import { RootState, AppDispatch } from '../store/store';
+import { clearFilters, setFilters } from '../store/slices/placesSlice';
+import { NeedCategory } from '../types/accessibility';
 
 const PlaceFilters: React.FC = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const { filters } = useSelector((state: RootState) => state.places);
+  const { user } = useSelector((state: RootState) => state.auth);
 
-  const accessibilityFeatures = [
-    'Wheelchair Accessible',
-    'Braille Signage',
-    'Audio Assistance',
-    'Sign Language Support',
-    'Accessible Parking',
-    'Accessible Restrooms',
-    'Elevator Access',
-    'Wide Doorways',
-    'Accessible Seating',
-    'Service Animal Friendly'
-  ];
+  const visibleCategories =
+    filters.needs.length > 0
+      ? filters.needs
+      : user?.accessibilityProfile.needs.length
+        ? user.accessibilityProfile.needs
+        : (Object.keys(ACCESSIBILITY_OPTIONS) as NeedCategory[]);
 
-  const handleTypeChange = (type: 'all' | 'restaurant' | 'office') => {
-    dispatch(setFilters({ type }));
+  const featureOptions = Array.from(
+    new Set(visibleCategories.flatMap((category) => ACCESSIBILITY_OPTIONS[category]))
+  );
+
+  const toggleNeed = (category: NeedCategory) => {
+    const needs = filters.needs.includes(category)
+      ? filters.needs.filter((entry) => entry !== category)
+      : [...filters.needs, category];
+
+    dispatch(setFilters({ needs, features: [] }));
   };
 
-  const handleFeatureToggle = (feature: string) => {
-    const newFeatures = filters.features.includes(feature)
-      ? filters.features.filter(f => f !== feature)
+  const toggleFeature = (feature: string) => {
+    const features = filters.features.includes(feature)
+      ? filters.features.filter((entry) => entry !== feature)
       : [...filters.features, feature];
-    dispatch(setFilters({ features: newFeatures }));
+
+    dispatch(setFilters({ features }));
   };
 
-  const handleClearFilters = () => {
-    dispatch(clearFilters());
+  const applyProfileFilters = () => {
+    if (!user) {
+      return;
+    }
+
+    dispatch(
+      setFilters({
+        needs: user.accessibilityProfile.needs,
+        features: getPreferredFeatures(user.accessibilityProfile),
+      })
+    );
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-          <Filter className="mr-2" size={20} />
-          Filters
-        </h3>
+    <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+            <Filter size={18} />
+            Discovery Filters
+          </h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Narrow places by type, access needs, and practical features.
+          </p>
+        </div>
         <button
-          onClick={handleClearFilters}
-          className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+          type="button"
+          onClick={() => dispatch(clearFilters())}
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
         >
-          <X size={16} className="mr-1" />
-          Clear All
+          <RotateCcw size={14} />
+          Reset
         </button>
       </div>
 
-      {/* Place Type Filter */}
-      <div className="mb-6">
-        <h4 className="text-sm font-semibold text-gray-900 mb-3">Place Type</h4>
-        <div className="space-y-2">
-          {[
-            { value: 'all', label: 'All Places' },
-            { value: 'restaurant', label: 'Restaurants' },
-            { value: 'office', label: 'Offices' }
-          ].map((option) => (
-            <label key={option.value} className="flex items-center">
-              <input
-                type="radio"
-                name="placeType"
-                value={option.value}
-                checked={filters.type === option.value}
-                onChange={() => handleTypeChange(option.value as any)}
-                className="mr-2 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700">{option.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Accessibility Features Filter */}
-      <div>
-        <h4 className="text-sm font-semibold text-gray-900 mb-3">Accessibility Features</h4>
-        <div className="space-y-2 max-h-64 overflow-y-auto">
-          {accessibilityFeatures.map((feature) => (
-            <label key={feature} className="flex items-center">
-              <input
-                type="checkbox"
-                checked={filters.features.includes(feature)}
-                onChange={() => handleFeatureToggle(feature)}
-                className="mr-2 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700">{feature}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Active Filters Display */}
-      {(filters.type !== 'all' || filters.features.length > 0) && (
-        <div className="mt-6 pt-6 border-t">
-          <h4 className="text-sm font-semibold text-gray-900 mb-2">Active Filters</h4>
-          <div className="flex flex-wrap gap-2">
-            {filters.type !== 'all' && (
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                {filters.type}
-              </span>
-            )}
-            {filters.features.map((feature) => (
-              <span
-                key={feature}
-                className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full"
-              >
-                {feature}
-              </span>
-            ))}
-          </div>
-        </div>
+      {user && (
+        <button
+          type="button"
+          onClick={applyProfileFilters}
+          className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+        >
+          <Sparkles size={16} />
+          Use My Accessibility Profile
+        </button>
       )}
-    </div>
+
+      <div className="mt-6">
+        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Place Type
+        </h4>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => dispatch(setFilters({ type: 'all' }))}
+            className={`rounded-full px-3 py-2 text-sm ${
+              filters.type === 'all'
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            All
+          </button>
+          {PLACE_TYPES.map((type) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => dispatch(setFilters({ type }))}
+              className={`rounded-full px-3 py-2 text-sm capitalize ${
+                filters.type === type
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {type.replace('-', ' ')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Need Categories
+        </h4>
+        <div className="mt-3 grid gap-2">
+          {(Object.keys(NEED_LABELS) as NeedCategory[]).map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => toggleNeed(category)}
+              className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                filters.needs.includes(category)
+                  ? 'border-blue-600 bg-blue-50 text-blue-900'
+                  : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-300'
+              }`}
+            >
+              {NEED_LABELS[category]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Feature Match
+        </h4>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {featureOptions.map((feature) => (
+            <button
+              key={feature}
+              type="button"
+              onClick={() => toggleFeature(feature)}
+              className={`rounded-full border px-3 py-2 text-sm transition ${
+                filters.features.includes(feature)
+                  ? 'border-emerald-600 bg-emerald-50 text-emerald-900'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300'
+              }`}
+            >
+              {feature}
+            </button>
+          ))}
+        </div>
+      </div>
+    </aside>
   );
 };
 

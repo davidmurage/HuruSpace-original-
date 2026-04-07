@@ -1,172 +1,164 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../store/store';
-import { fetchPlaces, createPlace, updatePlace, deletePlace } from '../store/slices/placesSlice';
+import { Link } from 'react-router-dom';
+import { BadgeCheck, Pencil, Plus, Trash2 } from 'lucide-react';
 import PlaceForm from '../components/PlaceForm';
-import { Plus, Edit, Trash2, Building2, Users } from 'lucide-react';
+import {
+  createPlace,
+  deletePlace,
+  fetchPlaces,
+  Place,
+  updatePlace,
+} from '../store/slices/placesSlice';
+import { RootState, AppDispatch } from '../store/store';
 
 const AdminDashboard: React.FC = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { places, isLoading } = useSelector((state: RootState) => state.places);
+  const { places, isLoading, error } = useSelector((state: RootState) => state.places);
   const [showForm, setShowForm] = useState(false);
-  const [editingPlace, setEditingPlace] = useState(null);
+  const [editingPlace, setEditingPlace] = useState<Place | null>(null);
 
   useEffect(() => {
-    dispatch(fetchPlaces() as any);
+    dispatch(fetchPlaces());
   }, [dispatch]);
 
-  const handleCreatePlace = (placeData: FormData) => {
-    dispatch(createPlace(placeData) as any);
+  const closeForm = () => {
     setShowForm(false);
-  };
-
-  const handleUpdatePlace = (id: string, placeData: FormData) => {
-    dispatch(updatePlace({ id, placeData }) as any);
     setEditingPlace(null);
   };
 
-  const handleDeletePlace = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this place?')) {
-      dispatch(deletePlace(id) as any);
+  const handleSubmit = async (formData: FormData) => {
+    if (editingPlace) {
+      await dispatch(updatePlace({ id: editingPlace._id, placeData: formData }));
+    } else {
+      await dispatch(createPlace(formData));
+    }
+    closeForm();
+  };
+
+  const handleDelete = async (placeId: string) => {
+    if (window.confirm('Delete this place entry?')) {
+      await dispatch(deletePlace(placeId));
     }
   };
 
   if (user?.role !== 'admin') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600">Access denied. Admin privileges required.</p>
+      <div className="flex min-h-[calc(100vh-80px)] items-center justify-center px-4">
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Admin access required
+          </h1>
+          <p className="mt-2 text-slate-600">
+            Verified partners and admins can manage community submissions here.
+          </p>
+          <Link
+            to="/places"
+            className="mt-6 inline-flex rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white"
+          >
+            Back to discovery
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center mb-8">
+    <div className="bg-slate-50 py-10">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="text-gray-600 mt-2">Manage places and monitor platform activity</p>
+            <h1 className="text-3xl font-bold text-slate-900">Admin workspace</h1>
+            <p className="mt-2 text-slate-600">
+              Review community places, verify entries, and keep accessibility data trusted.
+            </p>
           </div>
           <button
+            type="button"
             onClick={() => setShowForm(true)}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white"
           >
-            <Plus size={20} />
-            <span>Add New Place</span>
+            <Plus size={18} />
+            Add place
           </button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center">
-              <div className="bg-blue-100 p-3 rounded-full">
-                <Building2 className="text-blue-600" size={24} />
-              </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900">Total Places</h3>
-                <p className="text-2xl font-bold text-blue-600">{places.length}</p>
-              </div>
-            </div>
+        {error && (
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-8 rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-6 py-5">
+            <h2 className="text-lg font-semibold text-slate-900">Places</h2>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center">
-              <div className="bg-green-100 p-3 rounded-full">
-                <Users className="text-green-600" size={24} />
-              </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900">Restaurants</h3>
-                <p className="text-2xl font-bold text-green-600">
-                  {places.filter(p => p.type === 'restaurant').length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-center">
-              <div className="bg-purple-100 p-3 rounded-full">
-                <Building2 className="text-purple-600" size={24} />
-              </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-semibold text-gray-900">Offices</h3>
-                <p className="text-2xl font-bold text-purple-600">
-                  {places.filter(p => p.type === 'office').length}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Places Table */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Manage Places</h2>
-          </div>
-          
           {isLoading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading places...</p>
-            </div>
+            <div className="p-8 text-center text-slate-500">Loading places...</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Name
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Place
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Type
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Address
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Score
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Rating
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-100 bg-white">
                   {places.map((place) => (
-                    <tr key={place._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{place.name}</div>
+                    <tr key={place._id}>
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="font-semibold text-slate-900">{place.name}</div>
+                          <div className="text-sm text-slate-500">{place.address}</div>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          place.type === 'restaurant' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {place.type}
+                      <td className="px-6 py-4 text-sm capitalize text-slate-700">
+                        {place.type.replace('-', ' ')}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-900">
+                        {place.accessibilityScore}/100
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+                            place.verificationStatus === 'verified'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          <BadgeCheck size={13} />
+                          {place.verificationStatus}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {place.address}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {place.rating.toFixed(1)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
                           <button
+                            type="button"
                             onClick={() => setEditingPlace(place)}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="rounded-full border border-slate-200 p-2 text-slate-600"
                           >
-                            <Edit size={16} />
+                            <Pencil size={16} />
                           </button>
                           <button
-                            onClick={() => handleDeletePlace(place._id)}
-                            className="text-red-600 hover:text-red-900"
+                            type="button"
+                            onClick={() => handleDelete(place._id)}
+                            className="rounded-full border border-red-200 p-2 text-red-600"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -180,20 +172,14 @@ const AdminDashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Place Form Modal */}
         {(showForm || editingPlace) && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-screen overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6">
+            <div className="w-full max-w-4xl">
               <PlaceForm
                 place={editingPlace}
-                onSubmit={editingPlace ? 
-                  (data) => handleUpdatePlace(editingPlace._id, data) : 
-                  handleCreatePlace
-                }
-                onCancel={() => {
-                  setShowForm(false);
-                  setEditingPlace(null);
-                }}
+                allowVerification
+                onSubmit={handleSubmit}
+                onCancel={closeForm}
               />
             </div>
           </div>
