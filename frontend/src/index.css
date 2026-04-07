@@ -1,3 +1,62 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #f8fafc;
+  color: #0f172a;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
+}
+
+html.hs-large-text {
+  font-size: 18px;
+}
+
+html.hs-high-contrast body {
+  background-color: #020617;
+  color: #f8fafc;
+}
+
+html.hs-high-contrast .bg-white,
+html.hs-high-contrast .bg-slate-50 {
+  background-color: #0f172a !important;
+}
+
+html.hs-high-contrast .text-slate-900,
+html.hs-high-contrast .text-slate-700,
+html.hs-high-contrast .text-slate-600,
+html.hs-high-contrast .text-slate-500,
+html.hs-high-contrast .text-gray-900,
+html.hs-high-contrast .text-gray-700,
+html.hs-high-contrast .text-gray-600,
+html.hs-high-contrast .text-gray-500 {
+  color: #e2e8f0 !important;
+}
+
+html.hs-high-contrast .border-slate-200,
+html.hs-high-contrast .border-slate-100,
+html.hs-high-contrast .border-gray-200,
+html.hs-high-contrast .border-gray-100 {
+  border-color: #475569 !important;
+}
+
+html.hs-high-contrast input,
+html.hs-high-contrast textarea,
+html.hs-high-contrast select {
+  background-color: #020617 !important;
+  color: #f8fafc !important;
+  border-color: #64748b !important;
+}
+
+html.hs-simplified-ui .shadow-sm,
+html.hs-simplified-ui .shadow-lg {
+  box-shadow: none !important;
+}

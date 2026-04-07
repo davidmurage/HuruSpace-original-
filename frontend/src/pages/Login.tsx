@@ -1,107 +1,97 @@
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
-import { RootState } from '../store/store';
-import { login } from '../store/slices/authSlice';
-import { Mail, Lock, LogIn } from 'lucide-react';
+import { Lock, LogIn, Mail } from 'lucide-react';
+import { RootState, AppDispatch } from '../store/store';
+import { clearError, login } from '../store/slices/authSlice';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const { isLoading, error } = useSelector((state: RootState) => state.auth);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    dispatch(clearError());
+
     try {
-      await dispatch(login({ email, password }) as any);
+      await dispatch(login({ email, password })).unwrap();
       navigate('/dashboard');
-    } catch (error) {
-      console.error('Login failed:', error);
+    } catch {
+      // Error is handled in Redux state.
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="flex min-h-[calc(100vh-80px)] items-center justify-center bg-slate-50 px-4 py-12">
+      <div className="w-full max-w-md rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
         <div className="text-center">
-          <img 
-            src="/WhatsApp Image 2025-06-30 at 12.26.36.jpeg" 
-            alt="HuruSpaces Logo" 
-            className="mx-auto h-16 w-auto"
+          <img
+            src="/WhatsApp Image 2025-06-30 at 12.26.36.jpeg"
+            alt="HuruSpaces logo"
+            className="mx-auto h-16 w-16 rounded-3xl object-cover"
           />
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            Welcome Back
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Sign in to your HuruSpaces account
+          <h1 className="mt-6 text-3xl font-bold text-slate-900">Welcome back</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Sign in to access your accessibility profile and saved discovery flow.
           </p>
         </div>
 
-        <form className="mt-8 space-y-6 bg-white p-8 rounded-lg shadow-lg" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 text-gray-400" size={20} />
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter your email"
-                />
-              </div>
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-slate-700">Email</span>
+            <div className="relative">
+              <Mail className="absolute left-4 top-3.5 text-slate-400" size={18} />
+              <input
+                required
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4"
+                placeholder="you@example.com"
+              />
             </div>
+          </label>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
-                <input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter your password"
-                />
-              </div>
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-slate-700">Password</span>
+            <div className="relative">
+              <Lock className="absolute left-4 top-3.5 text-slate-400" size={18} />
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4"
+                placeholder="Enter your password"
+              />
             </div>
-          </div>
+          </label>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <LogIn size={20} />
-            <span>{isLoading ? 'Signing In...' : 'Sign In'}</span>
+            <LogIn size={18} />
+            {isLoading ? 'Signing in...' : 'Sign in'}
           </button>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link to="/register" className="text-blue-600 hover:text-blue-800 font-medium">
-                Sign up here
-              </Link>
-            </p>
-          </div>
         </form>
+
+        <p className="mt-6 text-center text-sm text-slate-600">
+          Need an account?{' '}
+          <Link className="font-semibold text-blue-700 hover:text-blue-800" to="/register">
+            Create one here
+          </Link>
+        </p>
       </div>
     </div>
   );

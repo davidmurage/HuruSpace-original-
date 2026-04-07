@@ -1,6 +1,32 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+const interactionSchema = new mongoose.Schema(
+  {
+    voice: { type: Boolean, default: false },
+    largeText: { type: Boolean, default: false },
+    highContrast: { type: Boolean, default: false },
+    simplifiedUi: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
+const accessibilityProfileSchema = new mongoose.Schema(
+  {
+    needs: [{ type: String }],
+    mobilityNeeds: [{ type: String }],
+    visualNeeds: [{ type: String }],
+    hearingNeeds: [{ type: String }],
+    cognitiveNeeds: [{ type: String }],
+    temporaryNeeds: [{ type: String }],
+    interaction: {
+      type: interactionSchema,
+      default: () => ({}),
+    },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -23,6 +49,18 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['user', 'admin'],
     default: 'user'
+  },
+  accessibilityProfile: {
+    type: accessibilityProfileSchema,
+    default: () => ({
+      needs: [],
+      mobilityNeeds: [],
+      visualNeeds: [],
+      hearingNeeds: [],
+      cognitiveNeeds: [],
+      temporaryNeeds: [],
+      interaction: {},
+    }),
   }
 }, {
   timestamps: true

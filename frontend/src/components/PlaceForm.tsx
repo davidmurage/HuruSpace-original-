@@ -1,311 +1,338 @@
-import React, { useState, useEffect } from 'react';
-import { X, Upload, MapPin } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
+import {
+  ACCESSIBILITY_OPTIONS,
+  PLACE_TYPES,
+  emptyAccessibilityDetails,
+  normalizeAccessibilityDetails,
+} from '../constants/accessibility';
+import { AccessibilityDetails, NeedCategory } from '../types/accessibility';
+import { Place } from '../store/slices/placesSlice';
 
 interface PlaceFormProps {
-  place?: any;
+  place?: Place | null;
+  allowVerification?: boolean;
   onSubmit: (data: FormData) => void;
   onCancel: () => void;
 }
 
-const PlaceForm: React.FC<PlaceFormProps> = ({ place, onSubmit, onCancel }) => {
+const PlaceForm: React.FC<PlaceFormProps> = ({
+  place,
+  allowVerification = false,
+  onSubmit,
+  onCancel,
+}) => {
+  const [details, setDetails] = useState<AccessibilityDetails>(emptyAccessibilityDetails());
+  const [images, setImages] = useState<File[]>([]);
+  const [imageUrlsText, setImageUrlsText] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     type: 'restaurant',
     address: '',
     description: '',
-    accessibilityFeatures: [],
     phone: '',
     email: '',
     latitude: '',
-    longitude: ''
+    longitude: '',
+    verificationStatus: 'community',
   });
-  const [images, setImages] = useState<File[]>([]);
-
-  const accessibilityOptions = [
-    'Wheelchair Accessible',
-    'Braille Signage',
-    'Audio Assistance',
-    'Sign Language Support',
-    'Accessible Parking',
-    'Accessible Restrooms',
-    'Elevator Access',
-    'Wide Doorways',
-    'Accessible Seating',
-    'Service Animal Friendly'
-  ];
 
   useEffect(() => {
-    if (place) {
-      setFormData({
-        name: place.name || '',
-        type: place.type || 'restaurant',
-        address: place.address || '',
-        description: place.description || '',
-        accessibilityFeatures: place.accessibilityFeatures || [],
-        phone: place.contact?.phone || '',
-        email: place.contact?.email || '',
-        latitude: place.location?.latitude?.toString() || '',
-        longitude: place.location?.longitude?.toString() || ''
-      });
+    if (!place) {
+      return;
     }
+
+    setDetails(normalizeAccessibilityDetails(place.accessibilityDetails));
+    setImageUrlsText(place.images.join('\n'));
+    setFormData({
+      name: place.name || '',
+      type: place.type || 'restaurant',
+      address: place.address || '',
+      description: place.description || '',
+      phone: place.contact?.phone || '',
+      email: place.contact?.email || '',
+      latitude: place.location?.latitude?.toString() || '',
+      longitude: place.location?.longitude?.toString() || '',
+      verificationStatus: place.verificationStatus || 'community',
+    });
   }, [place]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
-
-  const handleFeatureToggle = (feature: string) => {
-    const newFeatures = formData.accessibilityFeatures.includes(feature)
-      ? formData.accessibilityFeatures.filter(f => f !== feature)
-      : [...formData.accessibilityFeatures, feature];
-    
-    setFormData({
-      ...formData,
-      accessibilityFeatures: newFeatures
-    });
-  };
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setImages(Array.from(e.target.files));
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const submitData = new FormData();
-    submitData.append('name', formData.name);
-    submitData.append('type', formData.type);
-    submitData.append('address', formData.address);
-    submitData.append('description', formData.description);
-    submitData.append('accessibilityFeatures', JSON.stringify(formData.accessibilityFeatures));
-    submitData.append('contact', JSON.stringify({
-      phone: formData.phone,
-      email: formData.email
+  const handleFieldChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      [event.target.name]: event.target.value,
     }));
-    submitData.append('location', JSON.stringify({
-      latitude: parseFloat(formData.latitude) || 0,
-      longitude: parseFloat(formData.longitude) || 0
+  };
+
+  const handleFeatureToggle = (category: NeedCategory, option: string) => {
+    const currentValues = details[category];
+    const nextValues = currentValues.includes(option)
+      ? currentValues.filter((entry) => entry !== option)
+      : [...currentValues, option];
+
+    setDetails((current) => ({
+      ...current,
+      [category]: nextValues,
     }));
+  };
 
-    images.forEach((image) => {
-      submitData.append('images', image);
-    });
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
 
-    onSubmit(submitData);
+    const payload = new FormData();
+    payload.append('name', formData.name);
+    payload.append('type', formData.type);
+    payload.append('address', formData.address);
+    payload.append('description', formData.description);
+    payload.append(
+      'contact',
+      JSON.stringify({
+        phone: formData.phone,
+        email: formData.email,
+      })
+    );
+    payload.append(
+      'location',
+      JSON.stringify({
+        latitude: Number(formData.latitude) || 0,
+        longitude: Number(formData.longitude) || 0,
+      })
+    );
+    payload.append('accessibilityDetails', JSON.stringify(details));
+    payload.append(
+      'imageUrls',
+      JSON.stringify(
+        imageUrlsText
+          .split('\n')
+          .map((url) => url.trim())
+          .filter(Boolean)
+      )
+    );
+    payload.append('verificationStatus', formData.verificationStatus);
+
+    images.forEach((image) => payload.append('images', image));
+
+    onSubmit(payload);
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">
-          {place ? 'Edit Place' : 'Add New Place'}
-        </h2>
+    <div className="max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-slate-900">
+            {place ? 'Update accessibility data' : 'Add an accessible place'}
+          </h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Share location details, accessibility features, and proof links so
+            the community can navigate with confidence.
+          </p>
+        </div>
         <button
+          type="button"
           onClick={onCancel}
-          className="text-gray-400 hover:text-gray-600"
+          className="rounded-full border border-slate-200 p-2 text-slate-500"
         >
-          <X size={24} />
+          <X size={18} />
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Place Name *
-            </label>
+      <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Place name</span>
             <input
-              type="text"
-              name="name"
               required
+              name="name"
               value={formData.name}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter place name"
+              onChange={handleFieldChange}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+              placeholder="Westlands community cafe"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Type *
-            </label>
+          </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Place type</span>
             <select
               name="type"
               value={formData.type}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={handleFieldChange}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 capitalize"
             >
-              <option value="restaurant">Restaurant</option>
-              <option value="office">Office</option>
+              {PLACE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type.replace('-', ' ')}
+                </option>
+              ))}
             </select>
-          </div>
+          </label>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Address *
-          </label>
+        <label className="space-y-2 text-sm font-medium text-slate-700">
+          <span>Address</span>
           <input
-            type="text"
-            name="address"
             required
+            name="address"
             value={formData.address}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter full address"
+            onChange={handleFieldChange}
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+            placeholder="Street, city, and landmark"
           />
-        </div>
+        </label>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Description
-          </label>
+        <label className="space-y-2 text-sm font-medium text-slate-700">
+          <span>Description</span>
           <textarea
             name="description"
             rows={4}
             value={formData.description}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Describe the place and its accessibility features"
+            onChange={handleFieldChange}
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+            placeholder="Describe access points, toilets, entrances, and real-world conditions."
           />
-        </div>
+        </label>
 
-        {/* Contact Information */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Phone Number
-            </label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Phone</span>
             <input
-              type="tel"
               name="phone"
               value={formData.phone}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter phone number"
+              onChange={handleFieldChange}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+              placeholder="+254..."
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter email address"
-            />
-          </div>
-        </div>
-
-        {/* Location */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Latitude
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="latitude"
-              value={formData.latitude}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter latitude"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Longitude
-            </label>
-            <input
-              type="number"
-              step="any"
-              name="longitude"
-              value={formData.longitude}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter longitude"
-            />
-          </div>
-        </div>
-
-        {/* Accessibility Features */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Accessibility Features
           </label>
-          <div className="grid md:grid-cols-2 gap-2">
-            {accessibilityOptions.map((feature) => (
-              <label key={feature} className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.accessibilityFeatures.includes(feature)}
-                  onChange={() => handleFeatureToggle(feature)}
-                  className="mr-2 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">{feature}</span>
-              </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Email</span>
+            <input
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleFieldChange}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+              placeholder="hello@place.com"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Latitude</span>
+            <input
+              name="latitude"
+              type="number"
+              step="any"
+              value={formData.latitude}
+              onChange={handleFieldChange}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+              placeholder="-1.286389"
+            />
+          </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Longitude</span>
+            <input
+              name="longitude"
+              type="number"
+              step="any"
+              value={formData.longitude}
+              onChange={handleFieldChange}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+              placeholder="36.817223"
+            />
+          </label>
+        </div>
+
+        {allowVerification && (
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Verification status</span>
+            <select
+              name="verificationStatus"
+              value={formData.verificationStatus}
+              onChange={handleFieldChange}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+            >
+              <option value="community">Community reported</option>
+              <option value="verified">Verified</option>
+            </select>
+          </label>
+        )}
+
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <h3 className="text-lg font-semibold text-slate-900">
+            Accessibility Features by Category
+          </h3>
+          <div className="mt-4 space-y-4">
+            {(Object.keys(ACCESSIBILITY_OPTIONS) as NeedCategory[]).map((category) => (
+              <div key={category}>
+                <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                  {category}
+                </h4>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {ACCESSIBILITY_OPTIONS[category].map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => handleFeatureToggle(category, option)}
+                      className={`rounded-full border px-3 py-2 text-sm ${
+                        details[category].includes(option)
+                          ? 'border-blue-600 bg-blue-50 text-blue-900'
+                          : 'border-slate-200 bg-white text-slate-700'
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Image Upload */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Images
-          </label>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            <Upload className="mx-auto text-gray-400 mb-2" size={32} />
-            <p className="text-sm text-gray-600 mb-2">
-              Upload images of the place (max 5 images)
-            </p>
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              onChange={handleImageChange}
-              className="hidden"
-              id="image-upload"
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Proof image URLs</span>
+            <textarea
+              rows={4}
+              value={imageUrlsText}
+              onChange={(event) => setImageUrlsText(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+              placeholder="One image URL per line"
             />
-            <label
-              htmlFor="image-upload"
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 cursor-pointer"
-            >
-              Choose Images
-            </label>
-            {images.length > 0 && (
-              <p className="text-sm text-gray-600 mt-2">
-                {images.length} image(s) selected
+          </label>
+          <label className="space-y-2 text-sm font-medium text-slate-700">
+            <span>Upload new images</span>
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(event) =>
+                  setImages(event.target.files ? Array.from(event.target.files) : [])
+                }
+                className="w-full text-sm text-slate-600"
+              />
+              <p className="mt-3 text-xs text-slate-500">
+                Cloudinary uploads will work when backend image credentials are
+                configured. External URLs can be added right away.
               </p>
-            )}
-          </div>
+            </div>
+          </label>
         </div>
 
-        {/* Submit Buttons */}
-        <div className="flex justify-end space-x-4 pt-6 border-t">
+        <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+            className="rounded-full border border-slate-200 px-5 py-3 text-sm font-medium text-slate-700"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
-            {place ? 'Update Place' : 'Create Place'}
+            {place ? 'Save changes' : 'Submit place'}
           </button>
         </div>
       </form>

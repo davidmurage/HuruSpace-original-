@@ -1,183 +1,185 @@
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
-import { RootState } from '../store/store';
-import { register } from '../store/slices/authSlice';
-import { User, Mail, Lock, UserPlus } from 'lucide-react';
+import { Mail, ShieldCheck, User, UserPlus } from 'lucide-react';
+import AccessibilityProfileForm from '../components/AccessibilityProfileForm';
+import { emptyAccessibilityProfile } from '../constants/accessibility';
+import { RootState, AppDispatch } from '../store/store';
+import { clearError, register } from '../store/slices/authSlice';
 
 const Register: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
+  const { isLoading, error } = useSelector((state: RootState) => state.auth);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'user'
+    role: 'user',
   });
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const { isLoading, error } = useSelector((state: RootState) => state.auth);
+  const [accessibilityProfile, setAccessibilityProfile] = useState(
+    emptyAccessibilityProfile()
+  );
+  const [localError, setLocalError] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLocalError('');
+    dispatch(clearError());
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match');
+      setLocalError('Passwords do not match.');
       return;
     }
-    
+
     try {
-      await dispatch(register({
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        role: formData.role
-      }) as any);
+      await dispatch(
+        register({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role,
+          accessibilityProfile,
+        })
+      ).unwrap();
       navigate('/dashboard');
-    } catch (error) {
-      console.error('Registration failed:', error);
+    } catch {
+      // Redux keeps server errors.
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <img 
-            src="/WhatsApp Image 2025-06-30 at 12.26.36.jpeg" 
-            alt="HuruSpaces Logo" 
-            className="mx-auto h-16 w-auto"
-          />
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            Join HuruSpaces
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Create your account to start exploring accessible spaces
+    <div className="bg-slate-50 py-12">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-bold text-slate-900">
+            Create your Huruspaces profile
+          </h1>
+          <p className="mx-auto mt-3 max-w-3xl text-lg text-slate-600">
+            Start with your identity and accessibility preferences so discovery
+            feels practical from the first search.
           </p>
         </div>
 
-        <form className="mt-8 space-y-6 bg-white p-8 rounded-lg shadow-lg" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-              {error}
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm"
+        >
+          {(error || localError) && (
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {localError || error}
             </div>
           )}
 
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name
-              </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Full name</span>
               <div className="relative">
-                <User className="absolute left-3 top-3 text-gray-400" size={20} />
+                <User className="absolute left-4 top-3.5 text-slate-400" size={18} />
                 <input
-                  id="name"
-                  name="name"
-                  type="text"
                   required
                   value={formData.name}
-                  onChange={handleChange}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter your full name"
+                  onChange={(event) =>
+                    setFormData((current) => ({ ...current, name: event.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4"
+                  placeholder="Your name"
                 />
               </div>
-            </div>
+            </label>
 
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Email</span>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 text-gray-400" size={20} />
+                <Mail className="absolute left-4 top-3.5 text-slate-400" size={18} />
                 <input
-                  id="email"
-                  name="email"
+                  required
                   type="email"
-                  required
                   value={formData.email}
-                  onChange={handleChange}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter your email"
+                  onChange={(event) =>
+                    setFormData((current) => ({ ...current, email: event.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4"
+                  placeholder="you@example.com"
                 />
               </div>
-            </div>
+            </label>
 
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-                Account Type
-              </label>
-              <select
-                id="role"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="user">User (PWD)</option>
-                <option value="admin">Admin (Place Manager)</option>
-              </select>
-            </div>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Password</span>
+              <input
+                required
+                type="password"
+                value={formData.password}
+                onChange={(event) =>
+                  setFormData((current) => ({ ...current, password: event.target.value }))
+                }
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                placeholder="Minimum 6 characters"
+              />
+            </label>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Enter your password"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                Confirm Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 text-gray-400" size={20} />
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Confirm your password"
-                />
-              </div>
-            </div>
+            <label className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Confirm password</span>
+              <input
+                required
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(event) =>
+                  setFormData((current) => ({
+                    ...current,
+                    confirmPassword: event.target.value,
+                  }))
+                }
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                placeholder="Re-enter password"
+              />
+            </label>
           </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full flex items-center justify-center space-x-2 bg-green-600 text-white py-3 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <UserPlus size={20} />
-            <span>{isLoading ? 'Creating Account...' : 'Create Account'}</span>
-          </button>
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <label className="block space-y-2">
+              <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <ShieldCheck size={16} />
+                Account type
+              </span>
+              <select
+                value={formData.role}
+                onChange={(event) =>
+                  setFormData((current) => ({ ...current, role: event.target.value }))
+                }
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
+              >
+                <option value="user">Community user</option>
+                <option value="admin">Admin or verified partner</option>
+              </select>
+            </label>
+          </div>
 
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
+          <div className="mt-8">
+            <AccessibilityProfileForm
+              value={accessibilityProfile}
+              onChange={setAccessibilityProfile}
+            />
+          </div>
+
+          <div className="mt-8 flex flex-col gap-4 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600">
               Already have an account?{' '}
-              <Link to="/login" className="text-green-600 hover:text-green-800 font-medium">
-                Sign in here
+              <Link className="font-semibold text-blue-700 hover:text-blue-800" to="/login">
+                Sign in
               </Link>
             </p>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <UserPlus size={18} />
+              {isLoading ? 'Creating profile...' : 'Create profile'}
+            </button>
           </div>
         </form>
       </div>
