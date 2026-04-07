@@ -36,6 +36,46 @@ const reviewSchema = new mongoose.Schema(
   }
 );
 
+const alertSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    alertType: {
+      type: String,
+      enum: [
+        'lift-outage',
+        'ramp-blocked',
+        'toilet-inaccessible',
+        'stairs-only',
+        'audio-guidance-offline',
+        'other',
+      ],
+      default: 'other',
+    },
+    message: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    status: {
+      type: String,
+      enum: ['active', 'resolved'],
+      default: 'active',
+    },
+    resolvedAt: Date,
+    resolvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
 const placeSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -82,6 +122,7 @@ const placeSchema = new mongoose.Schema({
     enum: ['community', 'verified'],
     default: 'community',
   },
+  alerts: [alertSchema],
   reviews: [reviewSchema],
   rating: {
     type: Number,

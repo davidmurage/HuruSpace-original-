@@ -18,12 +18,29 @@ interface PlaceReviewUser {
   name: string;
 }
 
+interface PlaceAlertUser {
+  _id?: string;
+  id?: string;
+  name: string;
+}
+
 export interface PlaceReview {
   _id?: string;
   user: PlaceReviewUser | string;
   accessibilityRating: number;
   comment: string;
   issueFlags: string[];
+  createdAt: string;
+}
+
+export interface PlaceAlert {
+  _id?: string;
+  user: PlaceAlertUser | string;
+  alertType: string;
+  message: string;
+  status: 'active' | 'resolved';
+  resolvedAt?: string;
+  resolvedBy?: PlaceAlertUser | string;
   createdAt: string;
 }
 
@@ -45,6 +62,7 @@ export interface Place {
   images: string[];
   accessibilityScore: number;
   verificationStatus: 'community' | 'verified';
+  alerts: PlaceAlert[];
   reviews: PlaceReview[];
   rating: number;
   contact: {
@@ -205,6 +223,64 @@ export const addReview = createAsyncThunk(
   }
 );
 
+export const addAlert = createAsyncThunk(
+  'places/addAlert',
+  async (
+    {
+      placeId,
+      alertType,
+      message,
+    }: {
+      placeId: string;
+      alertType: string;
+      message: string;
+    },
+    { getState, rejectWithValue }
+  ) => {
+    const state = getState() as { auth: { token: string | null } };
+
+    try {
+      const response = await axios.post(
+        `${API_URL}/places/${placeId}/alerts`,
+        { alertType, message },
+        {
+          headers: {
+            Authorization: `Bearer ${state.auth.token}`,
+          },
+        }
+      );
+      return response.data as Place;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const resolveAlert = createAsyncThunk(
+  'places/resolveAlert',
+  async (
+    { placeId, alertId }: { placeId: string; alertId: string },
+    { getState, rejectWithValue }
+  ) => {
+    const state = getState() as { auth: { token: string | null } };
+
+    try {
+      const response = await axios.patch(
+        `${API_URL}/places/${placeId}/alerts/${alertId}/resolve`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${state.auth.token}`,
+          },
+        }
+      );
+      return response.data as Place;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 const placesSlice = createSlice({
   name: 'places',
   initialState,
@@ -279,6 +355,18 @@ const placesSlice = createSlice({
         state.places = upsertPlace(state.places, updatedPlace);
         state.selectedPlace = updatedPlace;
         state.filteredPlaces = filterPlaces(state.places, state.filters);
+      })
+      .addCase(addAlert.fulfilled, (state, action) => {
+        const updatedPlace = normalizePlace(action.payload);
+        state.places = upsertPlace(state.places, updatedPlace);
+        state.selectedPlace = updatedPlace;
+        state.filteredPlaces = filterPlaces(state.places, state.filters);
+      })
+      .addCase(resolveAlert.fulfilled, (state, action) => {
+        const updatedPlace = normalizePlace(action.payload);
+        state.places = upsertPlace(state.places, updatedPlace);
+        state.selectedPlace = updatedPlace;
+        state.filteredPlaces = filterPlaces(state.places, state.filters);
       });
   },
 });
@@ -310,6 +398,7 @@ function normalizePlace(place: Place): Place {
     ...place,
     accessibilityDetails: normalizeAccessibilityDetails(place.accessibilityDetails),
     accessibilityFeatures: place.accessibilityFeatures || [],
+    alerts: place.alerts || [],
     reviews: place.reviews || [],
     images: place.images || [],
     contact: {

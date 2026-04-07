@@ -1,26 +1,54 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Plus, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { LocateFixed, Plus, Search } from 'lucide-react';
 import AccessibilityMap from '../components/AccessibilityMap';
+import LiveRefreshStatus from '../components/LiveRefreshStatus';
 import PlaceCard from '../components/PlaceCard';
 import PlaceFilters from '../components/PlaceFilters';
 import PlaceForm from '../components/PlaceForm';
+import VoiceAssistant from '../components/VoiceAssistant';
 import { getPreferredFeatures } from '../constants/accessibility';
-import { createPlace, fetchPlaces, setFilters } from '../store/slices/placesSlice';
+import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
+import { useUserLocation } from '../hooks/useUserLocation';
+import {
+  clearFilters,
+  createPlace,
+  fetchPlaces,
+  setFilters,
+} from '../store/slices/placesSlice';
 import { RootState, AppDispatch } from '../store/store';
+import { calculateDistanceKm, formatDistanceKm, hasCoordinates } from '../utils/location';
 
 const Places: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const navigate = useNavigate();
   const { filteredPlaces, filters, isLoading, error } = useSelector(
     (state: RootState) => state.places
   );
   const { user } = useSelector((state: RootState) => state.auth);
+  const { location, isLocating, locationError, requestLocation } = useUserLocation();
   const [searchTerm, setSearchTerm] = useState(filters.searchTerm);
   const [showForm, setShowForm] = useState(false);
 
+  const refreshPlaces = useCallback(
+    () => dispatch(fetchPlaces()).unwrap(),
+    [dispatch]
+  );
+
+  const {
+    isRefreshing: isRefreshingPlaces,
+    lastRefreshError: placesRefreshError,
+    lastUpdatedAt: placesLastUpdatedAt,
+    refreshNow: refreshPlacesNow,
+  } = useRealtimeRefresh({
+    intervalMs: 45000,
+    onRefresh: refreshPlaces,
+  });
+
   useEffect(() => {
-    dispatch(fetchPlaces());
-  }, [dispatch]);
+    refreshPlaces();
+  }, [refreshPlaces]);
 
   const quickSummary = useMemo(() => {
     if (!user) {
@@ -46,6 +74,150 @@ const Places: React.FC = () => {
   const handleCreatePlace = async (formData: FormData) => {
     await dispatch(createPlace(formData));
     setShowForm(false);
+  };
+
+  const applyProfileFilters = () => {
+    if (!user) {
+      return;
+    }
+
+    dispatch(
+      setFilters({
+        needs: user.accessibilityProfile.needs,
+        features: getPreferredFeatures(user.accessibilityProfile),
+      })
+    );
+  };
+
+  const placesWithDistance = useMemo(
+    () =>
+      filteredPlaces
+        .map((place) => ({
+          place,
+          distanceKm:
+            location && hasCoordinates(place.location)
+              ? calculateDistanceKm(location, place.location)
+              : null,
+        }))
+        .sort((left, right) => {
+          if (left.distanceKm !== null && right.distanceKm !== null) {
+            return left.distanceKm - right.distanceKm;
+          }
+
+          if (left.distanceKm !== null) {
+            return -1;
+          }
+
+          if (right.distanceKm !== null) {
+            return 1;
+          }
+
+          return right.place.accessibilityScore - left.place.accessibilityScore;
+        }),
+    [filteredPlaces, location]
+  );
+
+  const visiblePlaces = placesWithDistance.map((entry) => entry.place);
+
+  const activeAlertCount = useMemo(
+    () =>
+      visiblePlaces.reduce(
+        (total, place) =>
+          total + place.alerts.filter((alert) => alert.status === 'active').length,
+        0
+      ),
+    [visiblePlaces]
+  );
+
+  const resultsSummary = useMemo(() => {
+    if (!visiblePlaces.length) {
+      return 'No places currently match your search and accessibility filters.';
+    }
+
+    const topPlaces = visiblePlaces
+      .slice(0, 3)
+      .map((place) => place.name)
+      .join(', ');
+
+    const alertSummary =
+      activeAlertCount > 0
+        ? `${activeAlertCount} active accessibility alert${
+            activeAlertCount > 1 ? 's are' : ' is'
+          } visible in these results.`
+        : 'No active alerts are visible in these results.';
+
+    return `${visiblePlaces.length} places match right now. Top matches include ${topPlaces}. ${alertSummary}`;
+  }, [activeAlertCount, visiblePlaces]);
+
+  const handleVoiceCommand = async (command: string) => {
+    const normalized = command.toLowerCase().trim();
+
+    if (!normalized) {
+      return 'I did not catch that. Try saying find restaurants or use my profile.';
+    }
+
+    if (normalized.includes('clear')) {
+      setSearchTerm('');
+      dispatch(clearFilters());
+      return 'Filters cleared. Showing all places again.';
+    }
+
+    if (normalized.includes('my profile')) {
+      applyProfileFilters();
+      return 'Applied your accessibility profile to discovery filters.';
+    }
+
+    if (normalized.includes('near me') || normalized.includes('my location')) {
+      requestLocation();
+      return 'Getting your location now. Nearby places will move to the top.';
+    }
+
+    if (normalized.includes('refresh') || normalized.includes('update')) {
+      const didRefresh = await refreshPlacesNow();
+      return didRefresh
+        ? 'Discovery results refreshed with the latest accessibility alerts.'
+        : 'I could not refresh discovery results just now. Please try again.';
+    }
+
+    if (normalized.includes('alert')) {
+      return activeAlertCount > 0
+        ? `There are ${activeAlertCount} active accessibility alerts in the visible results.`
+        : 'There are no active accessibility alerts in the visible results.';
+    }
+
+    const placeType = ['restaurant', 'office', 'venue', 'clinic', 'hotel', 'public-space'].find(
+      (type) => normalized.includes(type.replace('-', ' ')) || normalized.includes(type)
+    );
+
+    if (placeType) {
+      dispatch(setFilters({ type: placeType }));
+      return `Filtering places to show ${placeType.replace('-', ' ')} options. ${resultsSummary}`;
+    }
+
+    if (normalized.startsWith('find ')) {
+      const query = normalized.replace(/^find\s+/, '').trim();
+      setSearchTerm(query);
+      dispatch(setFilters({ searchTerm: query }));
+      return `Searching for ${query}.`;
+    }
+
+    if (normalized.startsWith('search for ')) {
+      const query = normalized.replace(/^search for\s+/, '').trim();
+      setSearchTerm(query);
+      dispatch(setFilters({ searchTerm: query }));
+      return `Searching for ${query}.`;
+    }
+
+    if (normalized.includes('open first') || normalized.includes('open top')) {
+      if (!visiblePlaces.length) {
+        return 'There is no matching place to open right now.';
+      }
+
+      navigate(`/places/${visiblePlaces[0]._id}`);
+      return `Opening ${visiblePlaces[0].name}.`;
+    }
+
+    return resultsSummary;
   };
 
   return (
@@ -93,6 +265,28 @@ const Places: React.FC = () => {
           </div>
         </form>
 
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={requestLocation}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm"
+          >
+            <LocateFixed size={16} />
+            {isLocating ? 'Locating...' : 'Use my location'}
+          </button>
+          {location && (
+            <span className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+              Nearby sorting is active
+            </span>
+          )}
+        </div>
+
+        {locationError && (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {locationError}
+          </div>
+        )}
+
         {error && (
           <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -103,7 +297,35 @@ const Places: React.FC = () => {
           <PlaceFilters />
 
           <div className="space-y-8">
-            <AccessibilityMap places={filteredPlaces.slice(0, 12)} />
+            <VoiceAssistant
+              title="Voice discovery"
+              description="Search places and control discovery using browser voice commands and spoken summaries."
+              commandExamples={[
+                'Find accessible restaurants',
+                'Use my profile',
+                'Read alerts',
+                'Refresh results',
+                'Show offices',
+                'Open first place',
+              ]}
+              onCommand={handleVoiceCommand}
+              getSummary={() => resultsSummary}
+            />
+
+            <LiveRefreshStatus
+              title="Live place updates"
+              description="Huruspaces checks for new accessibility alerts and place updates every 45 seconds while this page is visible."
+              isRefreshing={isRefreshingPlaces}
+              lastRefreshError={placesRefreshError}
+              lastUpdatedAt={placesLastUpdatedAt}
+              onRefresh={refreshPlacesNow}
+            />
+
+            <AccessibilityMap
+              places={visiblePlaces.slice(0, 12)}
+              title="Accessibility map"
+              description="Browse places with real map coordinates and switch the active marker."
+            />
 
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -116,7 +338,7 @@ const Places: React.FC = () => {
               </div>
             </div>
 
-            {isLoading ? (
+            {isLoading && filteredPlaces.length === 0 ? (
               <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-sm">
                 Loading accessible places...
               </div>
@@ -126,8 +348,12 @@ const Places: React.FC = () => {
               </div>
             ) : (
               <div className="grid gap-6 xl:grid-cols-2">
-                {filteredPlaces.map((place) => (
-                  <PlaceCard key={place._id} place={place} />
+                {placesWithDistance.map(({ place, distanceKm }) => (
+                  <PlaceCard
+                    key={place._id}
+                    place={place}
+                    distanceLabel={distanceKm !== null ? formatDistanceKm(distanceKm) : null}
+                  />
                 ))}
               </div>
             )}

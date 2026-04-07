@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { Loader2, MapPin, X } from 'lucide-react';
 import {
   ACCESSIBILITY_OPTIONS,
   PLACE_TYPES,
@@ -8,6 +8,8 @@ import {
 } from '../constants/accessibility';
 import { AccessibilityDetails, NeedCategory } from '../types/accessibility';
 import { Place } from '../store/slices/placesSlice';
+import { geocodeAddress, GeocodingResult } from '../utils/geocoding';
+import { hasCoordinates } from '../utils/location';
 
 interface PlaceFormProps {
   place?: Place | null;
@@ -25,6 +27,10 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
   const [details, setDetails] = useState<AccessibilityDetails>(emptyAccessibilityDetails());
   const [images, setImages] = useState<File[]>([]);
   const [imageUrlsText, setImageUrlsText] = useState('');
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodingMessage, setGeocodingMessage] = useState('');
+  const [lastResolvedAddress, setLastResolvedAddress] = useState('');
+  const [showManualCoordinates, setShowManualCoordinates] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     type: 'restaurant',
@@ -44,6 +50,12 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
 
     setDetails(normalizeAccessibilityDetails(place.accessibilityDetails));
     setImageUrlsText(place.images.join('\n'));
+    setLastResolvedAddress(place.address || '');
+    setGeocodingMessage(
+      hasCoordinates(place.location)
+        ? 'Coordinates are already saved for this place.'
+        : 'Use the address lookup to fetch coordinates for this place.'
+    );
     setFormData({
       name: place.name || '',
       type: place.type || 'restaurant',
@@ -60,10 +72,62 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
   const handleFieldChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
+    const { name, value } = event.target;
+
     setFormData((current) => ({
       ...current,
-      [event.target.name]: event.target.value,
+      [name]: value,
     }));
+
+    if (name === 'address') {
+      setLastResolvedAddress('');
+      setGeocodingMessage('Coordinates will be looked up from this address.');
+    }
+  };
+
+  const applyGeocodingResult = (result: GeocodingResult, sourceAddress: string) => {
+    setFormData((current) => ({
+      ...current,
+      latitude: result.latitude.toString(),
+      longitude: result.longitude.toString(),
+    }));
+    setLastResolvedAddress(sourceAddress.trim());
+    setGeocodingMessage(`Coordinates found for: ${result.displayName}`);
+  };
+
+  const lookupAddressCoordinates = async () => {
+    const sourceAddress = formData.address.trim();
+
+    if (!sourceAddress) {
+      setGeocodingMessage('Enter an address before finding coordinates.');
+      return null;
+    }
+
+    setIsGeocoding(true);
+    setGeocodingMessage('Finding coordinates from the address...');
+
+    try {
+      const result = await geocodeAddress(sourceAddress);
+
+      if (!result) {
+        setGeocodingMessage(
+          'No coordinates were found for that address. Try adding the city, country, or a nearby landmark.'
+        );
+        return null;
+      }
+
+      applyGeocodingResult(result, sourceAddress);
+      return result;
+    } catch (error) {
+      setGeocodingMessage(
+        error instanceof Error
+          ? error.message
+          : 'Address lookup failed. Please try again.'
+      );
+      return null;
+    } finally {
+      setIsGeocoding(false);
+    }
   };
 
   const handleFeatureToggle = (category: NeedCategory, option: string) => {
@@ -78,8 +142,24 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
     }));
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    const normalizedAddress = formData.address.trim();
+    const currentCoordinates = {
+      latitude: Number(formData.latitude),
+      longitude: Number(formData.longitude),
+    };
+    const canUseCurrentCoordinates =
+      hasCoordinates(currentCoordinates) &&
+      (showManualCoordinates || lastResolvedAddress === normalizedAddress);
+    const resolvedCoordinates = canUseCurrentCoordinates
+      ? currentCoordinates
+      : await lookupAddressCoordinates();
+
+    if (!resolvedCoordinates) {
+      return;
+    }
 
     const payload = new FormData();
     payload.append('name', formData.name);
@@ -96,8 +176,8 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
     payload.append(
       'location',
       JSON.stringify({
-        latitude: Number(formData.latitude) || 0,
-        longitude: Number(formData.longitude) || 0,
+        latitude: resolvedCoordinates.latitude,
+        longitude: resolvedCoordinates.longitude,
       })
     );
     payload.append('accessibilityDetails', JSON.stringify(details));
@@ -178,6 +258,9 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
             className="w-full rounded-2xl border border-slate-200 px-4 py-3"
             placeholder="Street, city, and landmark"
           />
+          <span className="block text-xs font-normal text-slate-500">
+            Add a complete address. Huruspaces will fetch latitude and longitude automatically.
+          </span>
         </label>
 
         <label className="space-y-2 text-sm font-medium text-slate-700">
@@ -216,32 +299,82 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
           </label>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2 text-sm font-medium text-slate-700">
-            <span>Latitude</span>
-            <input
-              name="latitude"
-              type="number"
-              step="any"
-              value={formData.latitude}
-              onChange={handleFieldChange}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
-              placeholder="-1.286389"
-            />
-          </label>
-          <label className="space-y-2 text-sm font-medium text-slate-700">
-            <span>Longitude</span>
-            <input
-              name="longitude"
-              type="number"
-              step="any"
-              value={formData.longitude}
-              onChange={handleFieldChange}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3"
-              placeholder="36.817223"
-            />
-          </label>
-        </div>
+        <section className="rounded-3xl border border-blue-100 bg-blue-50 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-blue-900">
+                <MapPin size={18} />
+                <h3 className="text-lg font-semibold">Map coordinates</h3>
+              </div>
+              <p className="mt-2 text-sm text-blue-900">
+                Coordinates are generated from the address, so contributors do not
+                need to enter latitude and longitude manually.
+              </p>
+              {geocodingMessage && (
+                <p className="mt-3 text-sm font-medium text-slate-700">
+                  {geocodingMessage}
+                </p>
+              )}
+              {hasCoordinates({
+                latitude: Number(formData.latitude),
+                longitude: Number(formData.longitude),
+              }) && (
+                <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-800">
+                  Lat {Number(formData.latitude).toFixed(6)}, Long{' '}
+                  {Number(formData.longitude).toFixed(6)}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void lookupAddressCoordinates()}
+                disabled={isGeocoding || !formData.address.trim()}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {isGeocoding && <Loader2 size={16} className="animate-spin" />}
+                {isGeocoding ? 'Finding...' : 'Find coordinates'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowManualCoordinates((current) => !current)}
+                className="rounded-full border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-800"
+              >
+                {showManualCoordinates ? 'Hide manual fields' : 'Edit manually'}
+              </button>
+            </div>
+          </div>
+
+          {showManualCoordinates && (
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                <span>Latitude</span>
+                <input
+                  name="latitude"
+                  type="number"
+                  step="any"
+                  value={formData.latitude}
+                  onChange={handleFieldChange}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                  placeholder="-1.286389"
+                />
+              </label>
+              <label className="space-y-2 text-sm font-medium text-slate-700">
+                <span>Longitude</span>
+                <input
+                  name="longitude"
+                  type="number"
+                  step="any"
+                  value={formData.longitude}
+                  onChange={handleFieldChange}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                  placeholder="36.817223"
+                />
+              </label>
+            </div>
+          )}
+        </section>
 
         {allowVerification && (
           <label className="space-y-2 text-sm font-medium text-slate-700">
@@ -330,9 +463,10 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
           </button>
           <button
             type="submit"
-            className="rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            disabled={isGeocoding}
+            className="rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
           >
-            {place ? 'Save changes' : 'Submit place'}
+            {isGeocoding ? 'Finding coordinates...' : place ? 'Save changes' : 'Submit place'}
           </button>
         </div>
       </form>
