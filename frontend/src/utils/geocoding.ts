@@ -1,4 +1,5 @@
 import { Coordinates } from './location';
+import { API_URL } from './config';
 
 interface NominatimSearchResult {
   lat: string;
@@ -10,8 +11,6 @@ export interface GeocodingResult extends Coordinates {
   displayName: string;
 }
 
-const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
-
 export const geocodeAddress = async (address: string): Promise<GeocodingResult | null> => {
   const query = address.trim();
 
@@ -19,31 +18,29 @@ export const geocodeAddress = async (address: string): Promise<GeocodingResult |
     return null;
   }
 
-  const params = new URLSearchParams({
-    q: query,
-    format: 'jsonv2',
-    limit: '1',
-  });
+  const params = new URLSearchParams({ address: query });
 
-  const response = await fetch(`${NOMINATIM_SEARCH_URL}?${params.toString()}`, {
+  const response = await fetch(`${API_URL}/places/geocode?${params.toString()}`, {
     headers: {
       Accept: 'application/json',
     },
   });
 
   if (!response.ok) {
-    throw new Error('Address lookup failed. Please check the address and try again.');
+    const errorBody = (await response.json().catch(() => null)) as {
+      message?: string;
+    } | null;
+
+    throw new Error(
+      errorBody?.message || 'Address lookup failed. Please check the address and try again.'
+    );
   }
 
-  const results = (await response.json()) as NominatimSearchResult[];
-  const firstResult = results[0];
+  const result = (await response.json()) as Partial<NominatimSearchResult> &
+    Partial<GeocodingResult>;
 
-  if (!firstResult) {
-    return null;
-  }
-
-  const latitude = Number(firstResult.lat);
-  const longitude = Number(firstResult.lon);
+  const latitude = Number(result.latitude ?? result.lat);
+  const longitude = Number(result.longitude ?? result.lon);
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     return null;
@@ -52,6 +49,6 @@ export const geocodeAddress = async (address: string): Promise<GeocodingResult |
   return {
     latitude,
     longitude,
-    displayName: firstResult.display_name || query,
+    displayName: result.displayName || result.display_name || query,
   };
 };

@@ -1,26 +1,72 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import { Compass, Settings2, Sparkles, UserCircle2 } from 'lucide-react';
+import {
+  CalendarClock,
+  Compass,
+  Settings2,
+  Sparkles,
+  UserCircle2,
+  XCircle,
+} from 'lucide-react';
 import AccessibilityProfileForm from '../components/AccessibilityProfileForm';
+import ReservationStatusBadge from '../components/ReservationStatusBadge';
 import { getPreferredFeatures } from '../constants/accessibility';
 import { updateProfile } from '../store/slices/authSlice';
 import { fetchPlaces } from '../store/slices/placesSlice';
+import {
+  cancelReservation,
+  fetchManagedReservations,
+  fetchMyReservations,
+  Reservation,
+  respondToReservation,
+} from '../store/slices/reservationsSlice';
 import { RootState, AppDispatch } from '../store/store';
+
+const formatReservationDateTime = (value: string) =>
+  new Date(value).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+const getRideSummary = (reservation: Reservation) => {
+  if (!reservation.ride.required) {
+    return 'No ride requested';
+  }
+
+  return `${
+    reservation.ride.provider === 'uber' ? 'Uber request' : 'Cab request'
+  } for ${formatReservationDateTime(
+    reservation.ride.pickupTime || reservation.reservationFor
+  )}`;
+};
 
 const Dashboard: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const { user, isLoading } = useSelector((state: RootState) => state.auth);
   const { places } = useSelector((state: RootState) => state.places);
+  const {
+    reservations,
+    managedReservations,
+    isLoading: reservationsLoading,
+    isManaging,
+    error: reservationsError,
+    managementError,
+  } = useSelector((state: RootState) => state.reservations);
   const [name, setName] = useState(user?.name || '');
   const [profile, setProfile] = useState(user?.accessibilityProfile || null);
   const [statusMessage, setStatusMessage] = useState('');
+  const [ownerResponseDrafts, setOwnerResponseDrafts] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     if (user) {
       setName(user.name);
       setProfile(user.accessibilityProfile);
       dispatch(fetchPlaces());
+      dispatch(fetchMyReservations());
+      dispatch(fetchManagedReservations());
     }
   }, [dispatch, user]);
 
@@ -37,6 +83,42 @@ const Dashboard: React.FC = () => {
       return place.createdBy._id === user.id || place.createdBy.id === user.id;
     }).length;
   }, [places, user]);
+
+  const upcomingReservations = useMemo(
+    () =>
+      reservations
+        .filter(
+          (reservation) =>
+            !['cancelled', 'declined', 'completed'].includes(reservation.status) &&
+            new Date(reservation.reservationFor) > new Date()
+        )
+        .sort(
+          (left, right) =>
+            new Date(left.reservationFor).getTime() -
+            new Date(right.reservationFor).getTime()
+        ),
+    [reservations]
+  );
+
+  const ownerInbox = useMemo(
+    () =>
+      managedReservations
+        .filter(
+          (reservation) =>
+            !['cancelled', 'completed'].includes(reservation.status)
+        )
+        .sort(
+          (left, right) =>
+            new Date(left.reservationFor).getTime() -
+            new Date(right.reservationFor).getTime()
+        ),
+    [managedReservations]
+  );
+
+  const canManagePlaces = useMemo(
+    () => Boolean(user?.role === 'admin' || contributedPlaces > 0 || ownerInbox.length > 0),
+    [contributedPlaces, ownerInbox.length, user?.role]
+  );
 
   if (!user || !profile) {
     return (
@@ -68,6 +150,38 @@ const Dashboard: React.FC = () => {
       setStatusMessage('Profile updated successfully.');
     } catch {
       setStatusMessage('Unable to save profile right now.');
+    }
+  };
+
+  const handleCancelReservation = async (reservationId: string) => {
+    try {
+      await dispatch(cancelReservation(reservationId)).unwrap();
+      setStatusMessage('Reservation cancelled.');
+    } catch {
+      setStatusMessage('Unable to cancel that reservation right now.');
+    }
+  };
+
+  const handleOwnerResponse = async (
+    reservationId: string,
+    responseStatus: 'confirmed' | 'declined'
+  ) => {
+    try {
+      await dispatch(
+        respondToReservation({
+          reservationId,
+          status: responseStatus,
+          message: ownerResponseDrafts[reservationId] || '',
+        })
+      ).unwrap();
+
+      setOwnerResponseDrafts((current) => ({
+        ...current,
+        [reservationId]: '',
+      }));
+      setStatusMessage('Reservation response sent.');
+    } catch {
+      setStatusMessage('Unable to send that reservation response right now.');
     }
   };
 
@@ -119,6 +233,19 @@ const Dashboard: React.FC = () => {
                   places contributed by your account
                 </p>
               </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center gap-3 text-violet-700">
+                  <CalendarClock size={20} />
+                  <h2 className="font-semibold text-slate-900">Upcoming bookings</h2>
+                </div>
+                <p className="mt-4 text-3xl font-bold text-slate-900">
+                  {upcomingReservations.length}
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  bookings waiting for or holding confirmations
+                </p>
+              </div>
             </section>
 
             <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
@@ -160,6 +287,265 @@ const Dashboard: React.FC = () => {
                 Explore with this profile
               </Link>
             </section>
+
+            <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-3">
+                <CalendarClock className="text-blue-700" size={20} />
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">My reservations</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Follow what the place owner and transport desk have sent back to you.
+                  </p>
+                </div>
+              </div>
+
+              {reservationsError && (
+                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {reservationsError}
+                </div>
+              )}
+
+              <div className="mt-5 space-y-4">
+                {reservationsLoading ? (
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+                    Loading your reservations...
+                  </div>
+                ) : upcomingReservations.length > 0 ? (
+                  upcomingReservations.map((reservation) => {
+                    const placeName =
+                      !reservation.place || typeof reservation.place === 'string'
+                        ? 'Reserved place'
+                        : reservation.place.name;
+                    const placeAddress =
+                      !reservation.place || typeof reservation.place === 'string'
+                        ? ''
+                        : reservation.place.address;
+
+                    return (
+                      <div
+                        key={reservation._id}
+                        className="rounded-3xl border border-slate-200 bg-slate-50 p-5"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-lg font-semibold text-slate-900">
+                                {placeName}
+                              </h3>
+                              <ReservationStatusBadge status={reservation.status} />
+                            </div>
+                            {placeAddress && (
+                              <p className="text-sm text-slate-600">{placeAddress}</p>
+                            )}
+                            <p className="text-sm font-medium text-slate-700">
+                              Visit: {formatReservationDateTime(reservation.reservationFor)}
+                            </p>
+                            <p className="text-sm text-slate-600">Guests: {reservation.guests}</p>
+                            <p className="text-sm text-slate-600">
+                              Ride: {getRideSummary(reservation)}
+                            </p>
+                            {reservation.ride.required && reservation.ride.pickupAddress && (
+                              <p className="text-sm text-slate-600">
+                                Pickup from: {reservation.ride.pickupAddress}
+                              </p>
+                            )}
+                            {reservation.accessibilitySupportNotes && (
+                              <p className="text-sm text-slate-600">
+                                Accessibility notes: {reservation.accessibilitySupportNotes}
+                              </p>
+                            )}
+                            <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-semibold">Place reply</span>
+                                <ReservationStatusBadge
+                                  status={reservation.ownerResponse.status}
+                                />
+                              </div>
+                              <p className="mt-2">
+                                {reservation.ownerResponse.message || 'No owner reply yet.'}
+                              </p>
+                            </div>
+                            {reservation.ride.required && (
+                              <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold">Ride reply</span>
+                                  <ReservationStatusBadge status={reservation.ride.status} />
+                                </div>
+                                <p className="mt-2">
+                                  {reservation.ride.statusMessage ||
+                                    'Your ride request has been logged.'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCancelReservation(reservation._id)}
+                            className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50"
+                          >
+                            <XCircle size={16} />
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+                    You do not have any active upcoming reservations yet. Book a place from the discovery page to schedule a visit and pickup.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {canManagePlaces && (
+              <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <CalendarClock className="text-emerald-700" size={20} />
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">
+                      Reservation inbox for your places
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Reply to people who booked places you manage so they know whether the visit is confirmed.
+                    </p>
+                  </div>
+                </div>
+
+                {managementError && (
+                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {managementError}
+                  </div>
+                )}
+
+                <div className="mt-5 space-y-4">
+                  {isManaging && ownerInbox.length === 0 ? (
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+                      Loading reservation inbox...
+                    </div>
+                  ) : ownerInbox.length > 0 ? (
+                    ownerInbox.map((reservation) => {
+                      const bookedBy =
+                        !reservation.user || typeof reservation.user === 'string'
+                          ? 'Community member'
+                          : reservation.user.name;
+                      const contactEmail =
+                        !reservation.user || typeof reservation.user === 'string'
+                          ? ''
+                          : reservation.user.email;
+                      const managedPlaceName =
+                        !reservation.place || typeof reservation.place === 'string'
+                          ? 'Managed place'
+                          : reservation.place.name;
+                      const isClosed = ['declined', 'cancelled', 'completed'].includes(
+                        reservation.status
+                      );
+
+                      return (
+                        <div
+                          key={reservation._id}
+                          className="rounded-3xl border border-slate-200 bg-slate-50 p-5"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-lg font-semibold text-slate-900">
+                                  {managedPlaceName}
+                                </h3>
+                                <ReservationStatusBadge status={reservation.status} />
+                              </div>
+                              <p className="mt-1 text-sm text-slate-600">
+                                Requested by {bookedBy}
+                                {contactEmail ? ` (${contactEmail})` : ''}
+                              </p>
+                              <p className="mt-2 text-sm text-slate-700">
+                                Visit: {formatReservationDateTime(reservation.reservationFor)}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-600">
+                                Guests: {reservation.guests}
+                              </p>
+                            </div>
+                            {reservation.ride.required && (
+                              <ReservationStatusBadge
+                                status={reservation.ride.status}
+                                label={`Ride ${reservation.ride.status}`}
+                              />
+                            )}
+                          </div>
+
+                          {reservation.accessibilitySupportNotes && (
+                            <p className="mt-4 text-sm text-slate-600">
+                              Accessibility needs: {reservation.accessibilitySupportNotes}
+                            </p>
+                          )}
+                          {reservation.notes && (
+                            <p className="mt-2 text-sm text-slate-600">
+                              Reservation notes: {reservation.notes}
+                            </p>
+                          )}
+
+                          <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-semibold">Current reply</span>
+                              <ReservationStatusBadge
+                                status={reservation.ownerResponse.status}
+                              />
+                            </div>
+                            <p className="mt-2">
+                              {reservation.ownerResponse.message || 'No reply sent yet.'}
+                            </p>
+                          </div>
+
+                          {!isClosed && (
+                            <div className="mt-4 space-y-3">
+                              <textarea
+                                rows={3}
+                                value={ownerResponseDrafts[reservation._id] || ''}
+                                onChange={(event) =>
+                                  setOwnerResponseDrafts((current) => ({
+                                    ...current,
+                                    [reservation._id]: event.target.value,
+                                  }))
+                                }
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                                placeholder="Add a note for the guest before confirming or declining."
+                              />
+                              <div className="flex flex-wrap gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOwnerResponse(reservation._id, 'confirmed')
+                                  }
+                                  className="rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white"
+                                >
+                                  {reservation.status === 'confirmed'
+                                    ? 'Update confirmation'
+                                    : 'Confirm reservation'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOwnerResponse(reservation._id, 'declined')
+                                  }
+                                  className="rounded-full border border-red-200 px-5 py-3 text-sm font-semibold text-red-700"
+                                >
+                                  Decline reservation
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
+                      No reservation requests have come in for your places yet.
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
 
           <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">

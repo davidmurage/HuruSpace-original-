@@ -6,6 +6,7 @@ import AccessibilityMap from '../components/AccessibilityMap';
 import LiveRefreshStatus from '../components/LiveRefreshStatus';
 import PlaceAlertsPanel from '../components/PlaceAlertsPanel';
 import PlaceNavigationPanel from '../components/PlaceNavigationPanel';
+import ReservationForm from '../components/ReservationForm';
 import VoiceAssistant from '../components/VoiceAssistant';
 import { NEED_LABELS, normalizeAccessibilityDetails } from '../constants/accessibility';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
@@ -16,6 +17,7 @@ import {
   resolveAlert,
   PlaceAlert,
 } from '../store/slices/placesSlice';
+import { createReservation } from '../store/slices/reservationsSlice';
 import { RootState, AppDispatch } from '../store/store';
 import { NeedCategory } from '../types/accessibility';
 import { speakText } from '../utils/speech';
@@ -208,6 +210,27 @@ const PlaceDetails: React.FC = () => {
     await dispatch(resolveAlert({ placeId: place._id, alertId }));
   };
 
+  const handleCreateReservation = async (payload: {
+    reservationFor: string;
+    guests: number;
+    notes: string;
+    accessibilitySupportNotes: string;
+    ride: {
+      required: boolean;
+      provider: 'cab' | 'uber';
+      pickupAddress: string;
+      pickupTime: string;
+      notes: string;
+    };
+  }) => {
+    await dispatch(
+      createReservation({
+        placeId: place._id,
+        ...payload,
+      })
+    ).unwrap();
+  };
+
   const handleVoiceCommand = async (command: string) => {
     const normalized = command.toLowerCase().trim();
 
@@ -258,6 +281,10 @@ const PlaceDetails: React.FC = () => {
 
     if (normalized.includes('report alert')) {
       return 'Use the live accessibility alerts panel to report issues like a blocked ramp or broken lift.';
+    }
+
+    if (normalized.includes('book') || normalized.includes('reserve')) {
+      return 'Use the booking section to reserve this place and request a pickup. You can then track confirmation replies in your dashboard.';
     }
 
     return placeSummary;
@@ -480,6 +507,33 @@ const PlaceDetails: React.FC = () => {
               place={place}
               profile={user?.accessibilityProfile || null}
             />
+
+            {user ? (
+              <ReservationForm
+                placeName={place.name}
+                defaultAccessibilitySupportNotes={
+                  user.accessibilityProfile.needs.length
+                    ? `Accessibility profile: ${user.accessibilityProfile.needs.join(', ')}`
+                    : ''
+                }
+                onSubmit={handleCreateReservation}
+              />
+            ) : (
+              <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Book and schedule pickup
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Sign in to reserve this place, request pickup, and track confirmations from the place and transport desk.
+                </p>
+                <Link
+                  to="/login"
+                  className="mt-4 inline-flex rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white"
+                >
+                  Sign in to book
+                </Link>
+              </section>
+            )}
 
             <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-center gap-2 text-emerald-700">

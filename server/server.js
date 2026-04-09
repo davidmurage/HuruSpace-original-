@@ -2,11 +2,17 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import placeRoutes from './routes/places.js';
+import reservationRoutes from './routes/reservations.js';
 import userRoutes from './routes/users.js';
+import { uploadsStaticRoot } from './utils/upload.js';
 
-dotenv.config();
+const serverRoot = path.dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: path.join(serverRoot, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,10 +21,12 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(uploadsStaticRoot));
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/places', placeRoutes);
+app.use('/api/reservations', reservationRoutes);
 app.use('/api/users', userRoutes);
 
 // MongoDB connection with better error handling

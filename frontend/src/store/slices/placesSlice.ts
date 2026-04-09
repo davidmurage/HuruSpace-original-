@@ -51,6 +51,15 @@ interface PlaceCreator {
   email: string;
 }
 
+interface PlaceSource {
+  kind?: 'community' | 'internet-sync';
+  provider?: string;
+  externalId?: string;
+  sourceUrl?: string;
+  syncedAt?: string;
+  searchArea?: string;
+}
+
 export interface Place {
   _id: string;
   name: string;
@@ -73,8 +82,68 @@ export interface Place {
     latitude: number;
     longitude: number;
   };
+  source?: PlaceSource;
   createdBy: PlaceCreator | string;
   createdAt: string;
+}
+
+export interface PlaceSyncResult {
+  message: string;
+  importedPlaces: Place[];
+  updatedPlaces?: Place[];
+  skippedDuplicates: number;
+  skippedMissingAccessibility: number;
+  skippedUnnamed: number;
+  skippedUnsupported: number;
+  totalResults: number;
+  radiusMeters: number;
+  searchArea: string;
+  requestedType: string;
+  center?: {
+    latitude: number;
+    longitude: number;
+    displayName?: string;
+  };
+}
+
+export interface PlaceSyncPreviewItem {
+  externalId: string;
+  name: string;
+  type: string;
+  address: string;
+  sourceUrl: string;
+  accessibilityScore: number;
+  action: 'new' | 'update' | 'skip';
+  incomingImageCount: number;
+  imagesToImportCount: number;
+  existingImageCount: number;
+  totalImageCountAfterSync: number;
+  previewImages: string[];
+  addedDataPoints: string[];
+  existingPlace: {
+    _id: string;
+    name: string;
+  } | null;
+}
+
+export interface PlaceSyncPreviewResult {
+  message: string;
+  previewItems: PlaceSyncPreviewItem[];
+  newPlacesCount: number;
+  placesToUpdateCount: number;
+  skippedDuplicates: number;
+  skippedMissingAccessibility: number;
+  skippedUnnamed: number;
+  skippedUnsupported: number;
+  totalResults: number;
+  radiusMeters: number;
+  searchArea: string;
+  requestedType: string;
+  center?: {
+    latitude: number;
+    longitude: number;
+    displayName?: string;
+  };
 }
 
 interface PlacesState {
@@ -182,6 +251,56 @@ export const deletePlace = createAsyncThunk(
         },
       });
       return id;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const syncPlacesFromInternet = createAsyncThunk(
+  'places/syncPlacesFromInternet',
+  async (
+    payload: {
+      searchArea: string;
+      type: string;
+      radiusKm: number;
+    },
+    { getState, rejectWithValue }
+  ) => {
+    const state = getState() as { auth: { token: string | null } };
+
+    try {
+      const response = await axios.post(`${API_URL}/places/sync`, payload, {
+        headers: {
+          Authorization: `Bearer ${state.auth.token}`,
+        },
+      });
+      return response.data as PlaceSyncResult;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const previewPlaceSync = createAsyncThunk(
+  'places/previewPlaceSync',
+  async (
+    payload: {
+      searchArea: string;
+      type: string;
+      radiusKm: number;
+    },
+    { getState, rejectWithValue }
+  ) => {
+    const state = getState() as { auth: { token: string | null } };
+
+    try {
+      const response = await axios.post(`${API_URL}/places/sync/preview`, payload, {
+        headers: {
+          Authorization: `Bearer ${state.auth.token}`,
+        },
+      });
+      return response.data as PlaceSyncPreviewResult;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -332,16 +451,66 @@ const placesSlice = createSlice({
         state.isLoading = false;
         state.error = (action.payload as string) || 'Failed to fetch place details';
       })
+      .addCase(createPlace.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
       .addCase(createPlace.fulfilled, (state, action) => {
+        state.isLoading = false;
         state.places.unshift(normalizePlace(action.payload));
         state.filteredPlaces = filterPlaces(state.places, state.filters);
       })
+      .addCase(createPlace.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || 'Failed to create place';
+      })
+      .addCase(updatePlace.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
       .addCase(updatePlace.fulfilled, (state, action) => {
+        state.isLoading = false;
         const updatedPlace = normalizePlace(action.payload);
         state.places = upsertPlace(state.places, updatedPlace);
         state.selectedPlace =
           state.selectedPlace?._id === updatedPlace._id ? updatedPlace : state.selectedPlace;
         state.filteredPlaces = filterPlaces(state.places, state.filters);
+      })
+      .addCase(updatePlace.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || 'Failed to update place';
+      })
+      .addCase(syncPlacesFromInternet.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(syncPlacesFromInternet.fulfilled, (state, action) => {
+        state.isLoading = false;
+        const syncedPlaces = normalizePlaces([
+          ...(action.payload.importedPlaces || []),
+          ...(action.payload.updatedPlaces || []),
+        ]);
+
+        state.places = syncedPlaces.reduce(
+          (collection, place) => upsertPlace(collection, place),
+          state.places
+        );
+        state.filteredPlaces = filterPlaces(state.places, state.filters);
+      })
+      .addCase(syncPlacesFromInternet.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || 'Failed to sync places';
+      })
+      .addCase(previewPlaceSync.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(previewPlaceSync.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(previewPlaceSync.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || 'Failed to preview place sync';
       })
       .addCase(deletePlace.fulfilled, (state, action) => {
         state.places = state.places.filter((place) => place._id !== action.payload);
@@ -408,6 +577,14 @@ function normalizePlace(place: Place): Place {
     location: {
       latitude: Number(place.location?.latitude || 0),
       longitude: Number(place.location?.longitude || 0),
+    },
+    source: {
+      kind: place.source?.kind || 'community',
+      provider: place.source?.provider || '',
+      externalId: place.source?.externalId || '',
+      sourceUrl: place.source?.sourceUrl || '',
+      syncedAt: place.source?.syncedAt || '',
+      searchArea: place.source?.searchArea || '',
     },
   };
 }

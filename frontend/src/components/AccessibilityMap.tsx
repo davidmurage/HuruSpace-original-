@@ -13,6 +13,8 @@ interface AccessibilityMapProps {
   highlightedPlaceId?: string;
   title?: string;
   description?: string;
+  maxPlaceCards?: number;
+  iframeHeightClass?: string;
 }
 
 const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
@@ -20,6 +22,8 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
   highlightedPlaceId,
   title = 'Accessibility Map',
   description = 'Explore precise place coordinates with OpenStreetMap.',
+  maxPlaceCards = 9,
+  iframeHeightClass = 'h-80',
 }) => {
   const placesWithCoordinates = useMemo(
     () => places.filter((place) => hasCoordinates(place.location)),
@@ -83,14 +87,14 @@ const AccessibilityMap: React.FC<AccessibilityMapProps> = ({
         <iframe
           title={`${selectedPlace.name} map`}
           src={buildOpenStreetMapEmbedUrl(selectedPlace.location)}
-          className="h-80 w-full border-0"
+          className={`${iframeHeightClass} w-full border-0`}
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
         />
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {placesWithCoordinates.slice(0, 9).map((place) => (
+        {placesWithCoordinates.slice(0, maxPlaceCards).map((place) => (
           <div
             key={place._id}
             className={`rounded-2xl border px-4 py-3 text-left transition ${

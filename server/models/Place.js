@@ -76,6 +76,38 @@ const alertSchema = new mongoose.Schema(
   }
 );
 
+const sourceSchema = new mongoose.Schema(
+  {
+    kind: {
+      type: String,
+      enum: ['community', 'internet-sync'],
+      default: 'community',
+    },
+    provider: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    externalId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    sourceUrl: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    syncedAt: Date,
+    searchArea: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+  },
+  { _id: false }
+);
+
 const placeSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -143,6 +175,17 @@ const placeSchema = new mongoose.Schema({
       type: Number,
       default: 0
     }
+  },
+  source: {
+    type: sourceSchema,
+    default: () => ({
+      kind: 'community',
+      provider: '',
+      externalId: '',
+      sourceUrl: '',
+      syncedAt: null,
+      searchArea: '',
+    }),
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,

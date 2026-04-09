@@ -19,6 +19,9 @@ interface PlaceCardProps {
   distanceLabel?: string | null;
 }
 
+const truncateText = (value: string, limit: number) =>
+  value.length > limit ? `${value.slice(0, limit - 1).trimEnd()}…` : value;
+
 const PlaceCard: React.FC<PlaceCardProps> = ({ place, distanceLabel }) => {
   const accessibilityDetails = normalizeAccessibilityDetails(place.accessibilityDetails);
   const features =
@@ -29,10 +32,14 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, distanceLabel }) => {
     ([, value]) => value.length > 0
   );
   const activeAlerts = place.alerts.filter((alert) => alert.status === 'active');
+  const summaryText = truncateText(
+    place.description || 'Community-contributed accessibility details available.',
+    120
+  );
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-      <div className="relative h-52 bg-slate-100">
+    <div className="flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+      <div className="relative h-44 bg-slate-100">
         {place.images[0] ? (
           <img
             src={place.images[0]}
@@ -73,13 +80,13 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, distanceLabel }) => {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="flex flex-1 flex-col p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-xl font-semibold text-slate-900">{place.name}</h3>
+            <h3 className="text-lg font-semibold text-slate-900">{place.name}</h3>
             <p className="mt-1 flex items-center gap-2 text-sm text-slate-600">
               <MapPin size={15} />
-              {place.address}
+              {truncateText(place.address, 72)}
             </p>
           </div>
           <div className="text-right">
@@ -96,12 +103,12 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, distanceLabel }) => {
           </div>
         </div>
 
-        <p className="mt-4 text-sm leading-6 text-slate-600">
-          {place.description || 'Community-contributed accessibility details available.'}
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          {summaryText}
         </p>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {features.slice(0, 4).map((feature) => (
+          {features.slice(0, 3).map((feature) => (
             <span
               key={feature}
               className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700"
@@ -109,15 +116,15 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, distanceLabel }) => {
               {feature}
             </span>
           ))}
-          {features.length > 4 && (
+          {features.length > 3 && (
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-              +{features.length - 4} more
+              +{features.length - 3} more
             </span>
           )}
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {activeCategories.map(([category, values]) => (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {activeCategories.slice(0, 3).map(([category, values]) => (
             <span
               key={category}
               className="flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
@@ -128,7 +135,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place, distanceLabel }) => {
           ))}
         </div>
 
-        <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
+        <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4">
           <div className="space-y-1 text-sm text-slate-500">
             <div className="flex items-center gap-2">
               <Phone size={14} />
