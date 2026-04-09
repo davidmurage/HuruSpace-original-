@@ -72,7 +72,7 @@ const Places: React.FC = () => {
   };
 
   const handleCreatePlace = async (formData: FormData) => {
-    await dispatch(createPlace(formData));
+    await dispatch(createPlace(formData)).unwrap();
     setShowForm(false);
   };
 
@@ -274,11 +274,6 @@ const Places: React.FC = () => {
             <LocateFixed size={16} />
             {isLocating ? 'Locating...' : 'Use my location'}
           </button>
-          {location && (
-            <span className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
-              Nearby sorting is active
-            </span>
-          )}
         </div>
 
         {locationError && (
@@ -293,48 +288,72 @@ const Places: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[320px_1fr]">
+        <div className="mt-8 grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
           <PlaceFilters />
 
-          <div className="space-y-8">
-            <VoiceAssistant
-              title="Voice discovery"
-              description="Search places and control discovery using browser voice commands and spoken summaries."
-              commandExamples={[
-                'Find accessible restaurants',
-                'Use my profile',
-                'Read alerts',
-                'Refresh results',
-                'Show offices',
-                'Open first place',
-              ]}
-              onCommand={handleVoiceCommand}
-              getSummary={() => resultsSummary}
-            />
+          <div className="space-y-6">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
+              <AccessibilityMap
+                places={visiblePlaces.slice(0, 8)}
+                title="Accessibility map"
+                description="Preview the strongest matching places without leaving the results view."
+                maxPlaceCards={6}
+                iframeHeightClass="h-72"
+              />
 
-            <LiveRefreshStatus
-              title="Live place updates"
-              description="Huruspaces checks for new accessibility alerts and place updates every 45 seconds while this page is visible."
-              isRefreshing={isRefreshingPlaces}
-              lastRefreshError={placesRefreshError}
-              lastUpdatedAt={placesLastUpdatedAt}
-              onRefresh={refreshPlacesNow}
-            />
+              <div className="space-y-6">
+                <LiveRefreshStatus
+                  title="Live place updates"
+                  description="Huruspaces checks for new accessibility alerts and place updates every 45 seconds while this page is visible."
+                  isRefreshing={isRefreshingPlaces}
+                  lastRefreshError={placesRefreshError}
+                  lastUpdatedAt={placesLastUpdatedAt}
+                  onRefresh={refreshPlacesNow}
+                />
 
-            <AccessibilityMap
-              places={visiblePlaces.slice(0, 12)}
-              title="Accessibility map"
-              description="Browse places with real map coordinates and switch the active marker."
-            />
+                <VoiceAssistant
+                  title="Voice discovery"
+                  description="Search places and control discovery using browser voice commands and spoken summaries."
+                  commandExamples={[
+                    'Find accessible restaurants',
+                    'Use my profile',
+                    'Read alerts',
+                    'Refresh results',
+                    'Show offices',
+                    'Open first place',
+                  ]}
+                  onCommand={handleVoiceCommand}
+                  getSummary={() => resultsSummary}
+                />
+              </div>
+            </div>
 
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold text-slate-900">
-                  Matching places
-                </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  {filteredPlaces.length} result(s) based on your current filters
-                </p>
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold text-slate-900">
+                    Matching places
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {filteredPlaces.length} result(s) based on your current filters
+                  </p>
+                  <p className="mt-3 max-w-3xl text-sm text-slate-600">
+                    {resultsSummary}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {location && (
+                    <span className="rounded-full bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+                      Sorted near you
+                    </span>
+                  )}
+                  {activeAlertCount > 0 && (
+                    <span className="rounded-full bg-amber-100 px-3 py-2 text-sm font-medium text-amber-800">
+                      {activeAlertCount} active accessibility alert
+                      {activeAlertCount > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -347,7 +366,7 @@ const Places: React.FC = () => {
                 No places match the current search and filters yet.
               </div>
             ) : (
-              <div className="grid gap-6 xl:grid-cols-2">
+              <div className="grid gap-5 md:grid-cols-2 2xl:grid-cols-3">
                 {placesWithDistance.map(({ place, distanceKm }) => (
                   <PlaceCard
                     key={place._id}

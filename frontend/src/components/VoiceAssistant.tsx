@@ -11,12 +11,17 @@ interface SpeechRecognitionEventLike extends Event {
   results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>>;
 }
 
+interface SpeechRecognitionErrorEventLike extends Event {
+  error?: string;
+  message?: string;
+}
+
 interface SpeechRecognitionLike extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: Event) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -50,6 +55,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [typedCommand, setTypedCommand] = useState('');
   const [status, setStatus] = useState('Ready');
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
@@ -62,6 +68,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
   );
 
   const canSpeak = canUseSpeechSynthesis();
+  const isSpeechRecognitionSupported = Boolean(recognitionConstructor);
 
   const speak = (text: string) => {
     if (!canSpeak || !text) {
@@ -69,6 +76,28 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     }
 
     speakText(text);
+  };
+
+  const runCommand = async (command: string) => {
+    const nextTranscript = command.trim();
+
+    if (!nextTranscript) {
+      setStatus('Type or say a command first.');
+      return;
+    }
+
+    setTranscript(nextTranscript);
+    setStatus('Processing command...');
+
+    try {
+      const response = await onCommand(nextTranscript);
+      const spokenResponse = response || `Heard: ${nextTranscript}`;
+      setStatus(spokenResponse);
+      speak(spokenResponse);
+    } catch (error) {
+      console.error('Voice assistant command error:', error);
+      setStatus('I could not complete that command.');
+    }
   };
 
   const stopAll = () => {
@@ -79,7 +108,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
 
   const startListening = () => {
     if (!recognitionConstructor) {
-      setStatus('Speech recognition is not supported in this browser.');
+      setStatus(
+        'Speech recognition is not supported in this browser. Use the typed command box below.'
+      );
       return;
     }
 
@@ -88,29 +119,21 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
     recognition.continuous = false;
     recognition.interimResults = false;
 
-    recognition.onresult = async (event) => {
+    recognition.onresult = (event) => {
       const nextTranscript = Array.from(event.results)
         .slice(event.resultIndex)
         .map((result) => result[0]?.transcript || '')
         .join(' ')
         .trim();
 
-      setTranscript(nextTranscript);
-      setStatus('Processing command...');
-
-      try {
-        const response = await onCommand(nextTranscript);
-        const spokenResponse = response || `Heard: ${nextTranscript}`;
-        setStatus(spokenResponse);
-        speak(spokenResponse);
-      } catch (error) {
-        console.error('Voice assistant command error:', error);
-        setStatus('I could not complete that voice command.');
-      }
+      void runCommand(nextTranscript);
     };
 
-    recognition.onerror = () => {
-      setStatus('Voice command failed. Please try again.');
+    recognition.onerror = (event) => {
+      const reason = event.error ? ` (${event.error})` : '';
+      setStatus(
+        `Voice command failed${reason}. Check microphone permission, or type the command below.`
+      );
       setIsListening(false);
     };
 
@@ -118,10 +141,22 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
       setIsListening(false);
     };
 
-    recognition.start();
-    recognitionRef.current = recognition;
-    setIsListening(true);
-    setStatus('Listening...');
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+      setIsListening(true);
+      setStatus('Listening...');
+    } catch (error) {
+      console.error('Speech recognition start error:', error);
+      setStatus('I could not start the microphone. Use the typed command box below.');
+      setIsListening(false);
+    }
+  };
+
+  const handleTypedSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void runCommand(typedCommand);
+    setTypedCommand('');
   };
 
   useEffect(() => {
@@ -140,10 +175,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
         <button
           type="button"
           onClick={isListening ? stopAll : startListening}
+          disabled={!isSpeechRecognitionSupported}
           className={`inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold ${
             isListening
               ? 'bg-red-600 text-white'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
+              : isSpeechRecognitionSupported
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'cursor-not-allowed bg-slate-300 text-slate-600'
           }`}
         >
           {isListening ? <MicOff size={16} /> : <Mic size={16} />}
@@ -172,6 +210,32 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({
           </button>
         )}
       </div>
+
+      <form onSubmit={handleTypedSubmit} className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <label className="sr-only" htmlFor={`${title.replace(/\s+/g, '-')}-command`}>
+          Type a voice command
+        </label>
+        <input
+          id={`${title.replace(/\s+/g, '-')}-command`}
+          value={typedCommand}
+          onChange={(event) => setTypedCommand(event.target.value)}
+          className="min-w-0 flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+          placeholder="Type a command, e.g. Read alerts"
+        />
+        <button
+          type="submit"
+          className="rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white"
+        >
+          Run command
+        </button>
+      </form>
+
+      {!isSpeechRecognitionSupported && (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Browser microphone speech recognition is mainly supported in Chrome and Edge.
+          Typed commands are available here as the accessible fallback.
+        </div>
+      )}
 
       <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
         <div className="font-semibold text-slate-900">Status</div>

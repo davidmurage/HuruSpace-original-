@@ -57,7 +57,7 @@ const PlaceFilters: React.FC = () => {
   };
 
   return (
-    <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">

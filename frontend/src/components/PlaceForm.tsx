@@ -14,9 +14,21 @@ import { hasCoordinates } from '../utils/location';
 interface PlaceFormProps {
   place?: Place | null;
   allowVerification?: boolean;
-  onSubmit: (data: FormData) => void;
+  onSubmit: (data: FormData) => Promise<void> | void;
   onCancel: () => void;
 }
+
+const getSubmitErrorMessage = (error: unknown) => {
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Place could not be saved. Please check the form and try again.';
+};
 
 const PlaceForm: React.FC<PlaceFormProps> = ({
   place,
@@ -28,7 +40,9 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
   const [images, setImages] = useState<File[]>([]);
   const [imageUrlsText, setImageUrlsText] = useState('');
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [geocodingMessage, setGeocodingMessage] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [lastResolvedAddress, setLastResolvedAddress] = useState('');
   const [showManualCoordinates, setShowManualCoordinates] = useState(false);
   const [formData, setFormData] = useState({
@@ -144,6 +158,7 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setSubmitError('');
 
     const normalizedAddress = formData.address.trim();
     const currentCoordinates = {
@@ -153,12 +168,15 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
     const canUseCurrentCoordinates =
       hasCoordinates(currentCoordinates) &&
       (showManualCoordinates || lastResolvedAddress === normalizedAddress);
-    const resolvedCoordinates = canUseCurrentCoordinates
+    let resolvedCoordinates = canUseCurrentCoordinates
       ? currentCoordinates
       : await lookupAddressCoordinates();
 
     if (!resolvedCoordinates) {
-      return;
+      setGeocodingMessage(
+        'Browser address lookup did not find coordinates. The server will try one more lookup before saving.'
+      );
+      resolvedCoordinates = null;
     }
 
     const payload = new FormData();
@@ -175,10 +193,14 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
     );
     payload.append(
       'location',
-      JSON.stringify({
-        latitude: resolvedCoordinates.latitude,
-        longitude: resolvedCoordinates.longitude,
-      })
+      JSON.stringify(
+        resolvedCoordinates
+          ? {
+              latitude: resolvedCoordinates.latitude,
+              longitude: resolvedCoordinates.longitude,
+            }
+          : {}
+      )
     );
     payload.append('accessibilityDetails', JSON.stringify(details));
     payload.append(
@@ -194,7 +216,15 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
 
     images.forEach((image) => payload.append('images', image));
 
-    onSubmit(payload);
+    setIsSubmitting(true);
+
+    try {
+      await onSubmit(payload);
+    } catch (error) {
+      setSubmitError(getSubmitErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -446,12 +476,18 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
                 className="w-full text-sm text-slate-600"
               />
               <p className="mt-3 text-xs text-slate-500">
-                Cloudinary uploads will work when backend image credentials are
-                configured. External URLs can be added right away.
+                Uploaded images use Cloudinary when configured, with a local
+                development fallback. External URLs can be added right away.
               </p>
             </div>
           </label>
         </div>
+
+        {submitError && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            {submitError}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
           <button
@@ -463,10 +499,16 @@ const PlaceForm: React.FC<PlaceFormProps> = ({
           </button>
           <button
             type="submit"
-            disabled={isGeocoding}
+            disabled={isGeocoding || isSubmitting}
             className="rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
           >
-            {isGeocoding ? 'Finding coordinates...' : place ? 'Save changes' : 'Submit place'}
+            {isGeocoding || isSubmitting
+              ? isGeocoding
+                ? 'Finding coordinates...'
+                : 'Saving place...'
+              : place
+                ? 'Save changes'
+                : 'Submit place'}
           </button>
         </div>
       </form>

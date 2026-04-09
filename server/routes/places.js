@@ -5,9 +5,12 @@ import {
   addAlert,
   createPlace,
   deletePlace,
+  geocodePlaceAddress,
   getPlaceById,
   getPlaces,
+  previewPlacesFromInternetSync,
   resolveAlert,
+  syncPlacesFromInternet,
   updatePlace,
 } from '../controllers/placeController.js';
 import { upload } from '../utils/upload.js';
@@ -15,6 +18,9 @@ import { upload } from '../utils/upload.js';
 const router = express.Router();
 
 router.get('/', getPlaces);
+router.get('/geocode', geocodePlaceAddress);
+router.post('/sync/preview', auth, previewPlacesFromInternetSync);
+router.post('/sync', auth, syncPlacesFromInternet);
 router.get('/:id', getPlaceById);
 router.post('/', auth, upload.array('images', 5), createPlace);
 router.put('/:id', auth, upload.array('images', 5), updatePlace);
