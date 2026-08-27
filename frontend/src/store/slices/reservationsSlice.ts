@@ -50,6 +50,11 @@ export interface ReservationRide {
   pickupAddress: string;
   pickupTime?: string;
   notes: string;
+  accessibilityRequirements: string[];
+  vehicleAccessibility: string[];
+  driverName: string;
+  driverPhone: string;
+  vehicleDetails: string;
   providerName: string;
   status:
     | 'not-required'
@@ -173,6 +178,7 @@ export const createReservation = createAsyncThunk(
         pickupAddress: string;
         pickupTime: string;
         notes: string;
+        accessibilityRequirements: string[];
       };
     },
     { getState, rejectWithValue }
@@ -235,6 +241,10 @@ export const respondToRideRequest = createAsyncThunk(
       status: 'confirmed' | 'declined' | 'completed';
       message: string;
       providerName: string;
+      vehicleAccessibility: string[];
+      driverName: string;
+      driverPhone: string;
+      vehicleDetails: string;
     },
     { getState, rejectWithValue }
   ) => {
@@ -247,6 +257,10 @@ export const respondToRideRequest = createAsyncThunk(
           status: payload.status,
           message: payload.message,
           providerName: payload.providerName,
+          vehicleAccessibility: payload.vehicleAccessibility,
+          driverName: payload.driverName,
+          driverPhone: payload.driverPhone,
+          vehicleDetails: payload.vehicleDetails,
         },
         {
           headers: getAuthHeaders(token),
@@ -325,6 +339,11 @@ const normalizeReservation = (reservation: Reservation): Reservation => ({
     pickupAddress: reservation.ride?.pickupAddress || '',
     pickupTime: reservation.ride?.pickupTime || '',
     notes: reservation.ride?.notes || '',
+    accessibilityRequirements: reservation.ride?.accessibilityRequirements || [],
+    vehicleAccessibility: reservation.ride?.vehicleAccessibility || [],
+    driverName: reservation.ride?.driverName || '',
+    driverPhone: reservation.ride?.driverPhone || '',
+    vehicleDetails: reservation.ride?.vehicleDetails || '',
     providerName: reservation.ride?.providerName || '',
     status: reservation.ride?.status || 'not-required',
     statusMessage: reservation.ride?.statusMessage || '',

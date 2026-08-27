@@ -8,7 +8,11 @@ import PlaceAlertsPanel from '../components/PlaceAlertsPanel';
 import PlaceNavigationPanel from '../components/PlaceNavigationPanel';
 import ReservationForm from '../components/ReservationForm';
 import VoiceAssistant from '../components/VoiceAssistant';
-import { NEED_LABELS, normalizeAccessibilityDetails } from '../constants/accessibility';
+import {
+  NEED_LABELS,
+  getTransportRequirements,
+  normalizeAccessibilityDetails,
+} from '../constants/accessibility';
 import { useRealtimeRefresh } from '../hooks/useRealtimeRefresh';
 import {
   addAlert,
@@ -516,6 +520,9 @@ const PlaceDetails: React.FC = () => {
                     ? `Accessibility profile: ${user.accessibilityProfile.needs.join(', ')}`
                     : ''
                 }
+                defaultTransportRequirements={getTransportRequirements(
+                  user.accessibilityProfile
+                )}
                 onSubmit={handleCreateReservation}
               />
             ) : (

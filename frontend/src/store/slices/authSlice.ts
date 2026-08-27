@@ -89,13 +89,11 @@ export const register = createAsyncThunk(
       name,
       email,
       password,
-      role,
       accessibilityProfile,
     }: {
       name: string;
       email: string;
       password: string;
-      role: string;
       accessibilityProfile: AccessibilityProfile;
     },
     { rejectWithValue }
@@ -105,7 +103,6 @@ export const register = createAsyncThunk(
         name,
         email,
         password,
-        role,
         accessibilityProfile,
       });
       persistSession(response.data.token, response.data.user);

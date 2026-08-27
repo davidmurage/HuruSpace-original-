@@ -349,6 +349,13 @@ const Dashboard: React.FC = () => {
                                 Pickup from: {reservation.ride.pickupAddress}
                               </p>
                             )}
+                            {reservation.ride.required &&
+                              reservation.ride.accessibilityRequirements.length > 0 && (
+                                <p className="text-sm text-slate-600">
+                                  Transport requirements:{' '}
+                                  {reservation.ride.accessibilityRequirements.join(', ')}
+                                </p>
+                              )}
                             {reservation.accessibilitySupportNotes && (
                               <p className="text-sm text-slate-600">
                                 Accessibility notes: {reservation.accessibilitySupportNotes}
@@ -375,6 +382,28 @@ const Dashboard: React.FC = () => {
                                   {reservation.ride.statusMessage ||
                                     'Your ride request has been logged.'}
                                 </p>
+                                {(reservation.ride.driverName ||
+                                  reservation.ride.vehicleDetails ||
+                                  reservation.ride.vehicleAccessibility.length > 0) && (
+                                  <div className="mt-3 space-y-1 text-slate-600">
+                                    {reservation.ride.driverName && (
+                                      <p>
+                                        Driver: {reservation.ride.driverName}
+                                        {reservation.ride.driverPhone
+                                          ? ` (${reservation.ride.driverPhone})`
+                                          : ''}
+                                      </p>
+                                    )}
+                                    {reservation.ride.vehicleDetails && (
+                                      <p>Vehicle: {reservation.ride.vehicleDetails}</p>
+                                    )}
+                                    {reservation.ride.vehicleAccessibility.length > 0 && (
+                                      <p>
+                                        Vehicle access: {reservation.ride.vehicleAccessibility.join(', ')}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

@@ -128,6 +128,18 @@ export const getProfilePreferenceKey = (
   }
 };
 
+export const TRANSPORT_ACCESSIBILITY_OPTIONS = [
+  'Wheelchair-accessible vehicle',
+  'Space for mobility aid',
+  'Driver assistance on arrival',
+  'Easy-entry vehicle',
+  'Service animal welcome',
+  'Clear arrival communication',
+  'Written or visual trip updates',
+  'Clear communication',
+  'Low-sensory ride where possible',
+] as const;
+
 export const normalizeAccessibilityDetails = (
   value?: Partial<AccessibilityDetails>
 ): AccessibilityDetails => ({
@@ -155,4 +167,35 @@ export const getPreferredFeatures = (profile?: AccessibilityProfile) => {
     ...profile.cognitiveNeeds,
     ...profile.temporaryNeeds,
   ];
+};
+
+export const getTransportRequirements = (profile?: AccessibilityProfile) => {
+  if (!profile) {
+    return [];
+  }
+
+  const requirements = new Set<string>();
+
+  if (profile.needs.includes('mobility')) {
+    requirements.add('Wheelchair-accessible vehicle');
+    requirements.add('Space for mobility aid');
+    requirements.add('Driver assistance on arrival');
+  }
+  if (profile.needs.includes('visual')) {
+    requirements.add('Driver assistance on arrival');
+    requirements.add('Clear arrival communication');
+  }
+  if (profile.needs.includes('hearing')) {
+    requirements.add('Written or visual trip updates');
+  }
+  if (profile.needs.includes('cognitive')) {
+    requirements.add('Clear communication');
+    requirements.add('Low-sensory ride where possible');
+  }
+  if (profile.needs.includes('temporary')) {
+    requirements.add('Easy-entry vehicle');
+    requirements.add('Driver assistance on arrival');
+  }
+
+  return [...requirements];
 };

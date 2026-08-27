@@ -4,7 +4,7 @@ import { sanitizeUser, signToken } from '../utils/auth.js';
 
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
     const accessibilityProfile = normalizeAccessibilityProfile(req.body.accessibilityProfile);
 
     const existingUser = await User.findOne({ email });
@@ -16,7 +16,8 @@ export const register = async (req, res) => {
       name,
       email,
       password,
-      role: role || 'user',
+      // Privileged accounts are created through an administrative process, never public signup.
+      role: 'user',
       accessibilityProfile,
     });
 

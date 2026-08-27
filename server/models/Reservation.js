@@ -47,6 +47,23 @@ const rideSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    accessibilityRequirements: [{ type: String }],
+    vehicleAccessibility: [{ type: String }],
+    driverName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    driverPhone: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    vehicleDetails: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     providerName: {
       type: String,
       trim: true,
