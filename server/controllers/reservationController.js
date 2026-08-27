@@ -1,6 +1,6 @@
 import Place from '../models/Place.js';
 import Reservation from '../models/Reservation.js';
-import { parseJsonField } from '../utils/accessibility.js';
+import { normalizeStringArray, parseJsonField } from '../utils/accessibility.js';
 
 const OWNER_RESPONSE_STATUSES = new Set(['confirmed', 'declined']);
 const RIDE_RESPONSE_STATUSES = new Set(['confirmed', 'declined', 'completed']);
@@ -32,7 +32,34 @@ const getOwnerReceivedMessage = () =>
 const getRideReceivedMessage = (provider) =>
   `Your ${provider === 'uber' ? 'Uber' : 'cab'} pickup request has been received and is awaiting transport confirmation.`;
 
-const normalizeRidePayload = (value, reservationFor) => {
+const getProfileTransportRequirements = (profile = {}) => {
+  const requirements = [];
+  const needs = Array.isArray(profile.needs) ? profile.needs : [];
+
+  if (needs.includes('mobility')) {
+    requirements.push('Wheelchair-accessible vehicle', 'Space for mobility aid', 'Driver assistance on arrival');
+  }
+
+  if (needs.includes('visual')) {
+    requirements.push('Driver assistance on arrival', 'Clear arrival communication');
+  }
+
+  if (needs.includes('hearing')) {
+    requirements.push('Written or visual trip updates');
+  }
+
+  if (needs.includes('cognitive')) {
+    requirements.push('Clear communication', 'Low-sensory ride where possible');
+  }
+
+  if (needs.includes('temporary')) {
+    requirements.push('Easy-entry vehicle', 'Driver assistance on arrival');
+  }
+
+  return [...new Set(requirements)];
+};
+
+const normalizeRidePayload = (value, reservationFor, accessibilityProfile) => {
   const source = parseJsonField(value, {});
   const rideRequired = Boolean(source?.required);
 
@@ -43,6 +70,11 @@ const normalizeRidePayload = (value, reservationFor) => {
       pickupAddress: '',
       pickupTime: null,
       notes: '',
+      accessibilityRequirements: [],
+      vehicleAccessibility: [],
+      driverName: '',
+      driverPhone: '',
+      vehicleDetails: '',
       providerName: '',
       status: 'not-required',
       statusMessage: '',
@@ -71,6 +103,7 @@ const normalizeRidePayload = (value, reservationFor) => {
   }
 
   const provider = source?.provider === 'uber' ? 'uber' : 'cab';
+  const requestedRequirements = normalizeStringArray(source?.accessibilityRequirements);
 
   return {
     required: true,
@@ -78,6 +111,14 @@ const normalizeRidePayload = (value, reservationFor) => {
     pickupAddress,
     pickupTime: pickupTimeResult.value,
     notes: String(source?.notes || '').trim(),
+    accessibilityRequirements:
+      requestedRequirements.length > 0
+        ? requestedRequirements
+        : getProfileTransportRequirements(accessibilityProfile),
+    vehicleAccessibility: [],
+    driverName: '',
+    driverPhone: '',
+    vehicleDetails: '',
     providerName: provider === 'uber' ? 'Uber dispatch' : 'Cab dispatch',
     status: 'received',
     statusMessage: getRideReceivedMessage(provider),
@@ -150,7 +191,11 @@ export const createReservation = async (req, res) => {
       return res.status(404).json({ message: 'Place not found' });
     }
 
-    const ride = normalizeRidePayload(req.body.ride, reservationForResult.value);
+    const ride = normalizeRidePayload(
+      req.body.ride,
+      reservationForResult.value,
+      req.user?.accessibilityProfile
+    );
 
     if ('error' in ride) {
       return res.status(400).json({ message: ride.error });
@@ -298,10 +343,7 @@ export const getTransportReservations = async (req, res) => {
     }
 
     const reservations = await populateReservation(
-      Reservation.find({
-        'ride.required': true,
-        status: { $in: ['received', 'confirmed'] },
-      })
+      Reservation.find({ 'ride.required': true, status: 'confirmed' })
     ).sort({ 'ride.pickupTime': 1, reservationFor: 1 });
 
     return res.json(reservations);
@@ -343,6 +385,12 @@ export const respondToRideRequest = async (req, res) => {
       });
     }
 
+    if (reservation.status !== 'confirmed') {
+      return res.status(400).json({
+        message: 'The place must confirm this reservation before transport can be dispatched.',
+      });
+    }
+
     const providerName =
       String(req.body.providerName || '').trim() ||
       reservation.ride.providerName ||
@@ -353,6 +401,12 @@ export const respondToRideRequest = async (req, res) => {
 
     reservation.ride.status = status;
     reservation.ride.providerName = providerName;
+    reservation.ride.vehicleAccessibility = normalizeStringArray(
+      req.body.vehicleAccessibility
+    );
+    reservation.ride.driverName = String(req.body.driverName || '').trim();
+    reservation.ride.driverPhone = String(req.body.driverPhone || '').trim();
+    reservation.ride.vehicleDetails = String(req.body.vehicleDetails || '').trim();
     reservation.ride.statusMessage = message;
     reservation.ride.respondedAt = new Date();
     reservation.ride.respondedBy = req.userId;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, ShieldCheck, User, UserPlus } from 'lucide-react';
+import { Mail, User, UserPlus } from 'lucide-react';
 import AccessibilityProfileForm from '../components/AccessibilityProfileForm';
 import { emptyAccessibilityProfile } from '../constants/accessibility';
 import { RootState, AppDispatch } from '../store/store';
@@ -16,7 +16,6 @@ const Register: React.FC = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'user',
   });
   const [accessibilityProfile, setAccessibilityProfile] = useState(
     emptyAccessibilityProfile()
@@ -39,7 +38,6 @@ const Register: React.FC = () => {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          role: formData.role,
           accessibilityProfile,
         })
       ).unwrap();
@@ -135,25 +133,6 @@ const Register: React.FC = () => {
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3"
                 placeholder="Re-enter password"
               />
-            </label>
-          </div>
-
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <label className="block space-y-2">
-              <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <ShieldCheck size={16} />
-                Account type
-              </span>
-              <select
-                value={formData.role}
-                onChange={(event) =>
-                  setFormData((current) => ({ ...current, role: event.target.value }))
-                }
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3"
-              >
-                <option value="user">Community user</option>
-                <option value="admin">Admin or verified partner</option>
-              </select>
             </label>
           </div>
 

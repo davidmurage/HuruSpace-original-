@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { CalendarClock, CarFront, CheckCircle2 } from 'lucide-react';
+import { TRANSPORT_ACCESSIBILITY_OPTIONS } from '../constants/accessibility';
 
 interface ReservationRideInput {
   required: boolean;
@@ -7,6 +8,7 @@ interface ReservationRideInput {
   pickupAddress: string;
   pickupTime: string;
   notes: string;
+  accessibilityRequirements: string[];
 }
 
 interface ReservationPayload {
@@ -20,6 +22,7 @@ interface ReservationPayload {
 interface ReservationFormProps {
   placeName: string;
   defaultAccessibilitySupportNotes?: string;
+  defaultTransportRequirements?: string[];
   onSubmit: (payload: ReservationPayload) => Promise<void>;
 }
 
@@ -54,6 +57,7 @@ const buildSuggestedPickupTime = (reservationFor: string) => {
 const ReservationForm: React.FC<ReservationFormProps> = ({
   placeName,
   defaultAccessibilitySupportNotes = '',
+  defaultTransportRequirements = [],
   onSubmit,
 }) => {
   const defaultReservationTime = useMemo(buildDefaultReservationTime, []);
@@ -69,6 +73,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
     pickupAddress: '',
     pickupTime: buildSuggestedPickupTime(defaultReservationTime),
     notes: '',
+    accessibilityRequirements: defaultTransportRequirements,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -90,6 +95,15 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         required && !current.pickupTime
           ? buildSuggestedPickupTime(reservationFor)
           : current.pickupTime,
+    }));
+  };
+
+  const toggleTransportRequirement = (requirement: string) => {
+    setRide((current) => ({
+      ...current,
+      accessibilityRequirements: current.accessibilityRequirements.includes(requirement)
+        ? current.accessibilityRequirements.filter((entry) => entry !== requirement)
+        : [...current.accessibilityRequirements, requirement],
     }));
   };
 
@@ -117,6 +131,7 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
         pickupAddress: '',
         pickupTime: buildSuggestedPickupTime(reservationFor),
         notes: '',
+        accessibilityRequirements: defaultTransportRequirements,
       }));
     } catch (error) {
       setErrorMessage(
@@ -263,6 +278,36 @@ const ReservationForm: React.FC<ReservationFormProps> = ({
                       required={ride.required}
                     />
                   </label>
+
+                  <fieldset className="md:col-span-2">
+                    <legend className="text-sm font-medium text-slate-700">
+                      Transport accessibility requirements
+                    </legend>
+                    <p className="mt-1 text-xs text-slate-500">
+                      These are shared with the transport provider so they can assign a suitable vehicle and driver.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {TRANSPORT_ACCESSIBILITY_OPTIONS.map((requirement) => {
+                        const selected = ride.accessibilityRequirements.includes(requirement);
+
+                        return (
+                          <button
+                            key={requirement}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => toggleTransportRequirement(requirement)}
+                            className={`rounded-full border px-3 py-2 text-sm transition ${
+                              selected
+                                ? 'border-emerald-600 bg-emerald-50 text-emerald-900'
+                                : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300'
+                            }`}
+                          >
+                            {requirement}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
 
                   <label className="block space-y-2 md:col-span-2">
                     <span className="text-sm font-medium text-slate-700">Ride notes</span>

@@ -179,6 +179,10 @@ const AdminDashboard: React.FC = () => {
   );
   const [rideResponseDrafts, setRideResponseDrafts] = useState<Record<string, string>>({});
   const [providerNames, setProviderNames] = useState<Record<string, string>>({});
+  const [driverNames, setDriverNames] = useState<Record<string, string>>({});
+  const [driverPhones, setDriverPhones] = useState<Record<string, string>>({});
+  const [vehicleDetails, setVehicleDetails] = useState<Record<string, string>>({});
+  const [vehicleAccessibility, setVehicleAccessibility] = useState<Record<string, string>>({});
   const [placesPage, setPlacesPage] = useState(1);
   const [reservationsPage, setReservationsPage] = useState(1);
   const [transportPage, setTransportPage] = useState(1);
@@ -419,6 +423,13 @@ const AdminDashboard: React.FC = () => {
           status,
           message: rideResponseDrafts[reservationId] || '',
           providerName: providerNames[reservationId] || fallbackProvider,
+          vehicleAccessibility: (vehicleAccessibility[reservationId] || '')
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean),
+          driverName: driverNames[reservationId] || '',
+          driverPhone: driverPhones[reservationId] || '',
+          vehicleDetails: vehicleDetails[reservationId] || '',
         })
       ).unwrap();
 
@@ -1156,6 +1167,9 @@ const AdminDashboard: React.FC = () => {
                       Provider
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Access requirements
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                       Current Reply
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1211,6 +1225,27 @@ const AdminDashboard: React.FC = () => {
                             <div className="mt-1 text-slate-500">{defaultProviderName}</div>
                           </td>
                           <td className="px-6 py-4 align-top text-sm text-slate-700">
+                            {reservation.ride.accessibilityRequirements.length > 0 ? (
+                              <div className="flex max-w-xs flex-wrap gap-2">
+                                {reservation.ride.accessibilityRequirements.map((requirement) => (
+                                  <span
+                                    key={requirement}
+                                    className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800"
+                                  >
+                                    {requirement}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-slate-500">No specific requirements selected.</span>
+                            )}
+                            {reservation.ride.vehicleAccessibility.length > 0 && (
+                              <div className="mt-3 text-slate-600">
+                                Vehicle offers: {reservation.ride.vehicleAccessibility.join(', ')}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 align-top text-sm text-slate-700">
                             <div className="mb-2">
                               <ReservationStatusBadge status={reservation.ride.status} />
                             </div>
@@ -1230,6 +1265,50 @@ const AdminDashboard: React.FC = () => {
                                 }
                                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
                                 placeholder="Provider or dispatcher name"
+                              />
+                              <input
+                                value={driverNames[reservation._id] || reservation.ride.driverName || ''}
+                                onChange={(event) =>
+                                  setDriverNames((current) => ({
+                                    ...current,
+                                    [reservation._id]: event.target.value,
+                                  }))
+                                }
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                                placeholder="Driver name"
+                              />
+                              <input
+                                value={driverPhones[reservation._id] || reservation.ride.driverPhone || ''}
+                                onChange={(event) =>
+                                  setDriverPhones((current) => ({
+                                    ...current,
+                                    [reservation._id]: event.target.value,
+                                  }))
+                                }
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                                placeholder="Driver contact number"
+                              />
+                              <input
+                                value={vehicleDetails[reservation._id] || reservation.ride.vehicleDetails || ''}
+                                onChange={(event) =>
+                                  setVehicleDetails((current) => ({
+                                    ...current,
+                                    [reservation._id]: event.target.value,
+                                  }))
+                                }
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                                placeholder="Vehicle details, such as plate and vehicle type"
+                              />
+                              <input
+                                value={vehicleAccessibility[reservation._id] || reservation.ride.vehicleAccessibility.join(', ')}
+                                onChange={(event) =>
+                                  setVehicleAccessibility((current) => ({
+                                    ...current,
+                                    [reservation._id]: event.target.value,
+                                  }))
+                                }
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                                placeholder="Vehicle accessibility features, separated by commas"
                               />
                               <textarea
                                 rows={3}
@@ -1292,7 +1371,7 @@ const AdminDashboard: React.FC = () => {
                   ) : (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={7}
                         className="px-6 py-10 text-center text-sm text-slate-500"
                       >
                         {isTransportLoading
