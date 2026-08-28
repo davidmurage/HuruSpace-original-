@@ -56,7 +56,7 @@ const Navbar: React.FC = () => {
           >
             Discover
           </Link>
-          {user && (
+          {user && user.role !== 'admin' && (
             <Link
               className="text-sm font-medium text-slate-600 hover:text-blue-700"
               to="/dashboard"
@@ -133,7 +133,7 @@ const Navbar: React.FC = () => {
               <MapPinned size={18} />
               Discover spaces
             </Link>
-            {user && (
+            {user && user.role !== 'admin' && (
               <Link
                 to="/dashboard"
                 onClick={closeMenu}

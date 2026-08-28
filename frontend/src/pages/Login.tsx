@@ -17,8 +17,8 @@ const Login: React.FC = () => {
     dispatch(clearError());
 
     try {
-      await dispatch(login({ email, password })).unwrap();
-      navigate('/dashboard');
+      const result = await dispatch(login({ email, password })).unwrap();
+      navigate(result.user.role === 'admin' ? '/admin' : '/dashboard');
     } catch {
       // Error is handled in Redux state.
     }
@@ -75,6 +75,12 @@ const Login: React.FC = () => {
               />
             </div>
           </label>
+
+          <div className="text-right">
+            <Link className="text-sm font-semibold text-blue-700 hover:text-blue-800" to="/forgot-password">
+              Forgot password?
+            </Link>
+          </div>
 
           <button
             type="submit"
