@@ -113,6 +113,41 @@ export const register = createAsyncThunk(
   }
 );
 
+export const requestPasswordReset = createAsyncThunk(
+  'auth/requestPasswordReset',
+  async (email: string, { rejectWithValue }) => {
+    try {
+      const response = await axios.post(`${API_URL}/auth/forgot-password`, { email });
+      return response.data as { message: string };
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const resetPassword = createAsyncThunk(
+  'auth/resetPassword',
+  async (
+    {
+      email,
+      code,
+      password,
+    }: { email: string; code: string; password: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await axios.post(`${API_URL}/auth/reset-password`, {
+        email,
+        code,
+        password,
+      });
+      return response.data as { message: string };
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 export const fetchCurrentUser = createAsyncThunk(
   'auth/fetchCurrentUser',
   async (_, { getState, rejectWithValue }) => {
@@ -203,6 +238,28 @@ const authSlice = createSlice({
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
         state.error = (action.payload as string) || 'Registration failed';
+      })
+      .addCase(requestPasswordReset.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(requestPasswordReset.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(requestPasswordReset.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || 'Unable to request a password reset';
+      })
+      .addCase(resetPassword.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(resetPassword.fulfilled, (state) => {
+        state.isLoading = false;
+      })
+      .addCase(resetPassword.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = (action.payload as string) || 'Unable to reset password';
       })
       .addCase(fetchCurrentUser.pending, (state) => {
         state.isLoading = true;
